@@ -1,0 +1,150 @@
+{
+  "kind": "exploratory_microbenchmark",
+  "system": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "source_sha256": "c69793bf6da400301ecb2fd174d270a3bd8f191fbfcb953fb160db18db2ae64e",
+  "note": "Record build flags/compiler and hardware separately; not a production budget.",
+  "runs": [
+    [
+      {
+        "scenario": "successful_operation",
+        "samples": 1000.0,
+        "operations_per_sample": 100.0,
+        "p50_ns": 6.67,
+        "p95_ns": 12.92,
+        "p99_ns": 15.0,
+        "operations_per_second": 125595000.0
+      },
+      {
+        "scenario": "error_without_trace_filtered",
+        "samples": 5000.0,
+        "operations_per_sample": 1.0,
+        "p50_ns": 6917.0,
+        "p95_ns": 13542.0,
+        "p99_ns": 20333.0,
+        "operations_per_second": 132340.0
+      },
+      {
+        "scenario": "error_with_trace_filtered",
+        "samples": 5000.0,
+        "operations_per_sample": 1.0,
+        "p50_ns": 7041.0,
+        "p95_ns": 7250.0,
+        "p99_ns": 14500.0,
+        "operations_per_second": 137685.0
+      },
+      {
+        "scenario": "file_report",
+        "samples": 2000.0,
+        "operations_per_sample": 1.0,
+        "p50_ns": 96750.0,
+        "p95_ns": 227333.0,
+        "p99_ns": 347834.0,
+        "operations_per_second": 8722.29
+      },
+      {
+        "scenario": "throttled_report",
+        "samples": 10000.0,
+        "operations_per_sample": 10.0,
+        "p50_ns": 104.2,
+        "p95_ns": 112.5,
+        "p99_ns": 116.7,
+        "operations_per_second": 9161210.0
+      }
+    ],
+    [
+      {
+        "scenario": "successful_operation",
+        "samples": 1000.0,
+        "operations_per_sample": 100.0,
+        "p50_ns": 6.67,
+        "p95_ns": 7.09,
+        "p99_ns": 7.5,
+        "operations_per_second": 136986000.0
+      },
+      {
+        "scenario": "error_without_trace_filtered",
+        "samples": 5000.0,
+        "operations_per_sample": 1.0,
+        "p50_ns": 7083.0,
+        "p95_ns": 14042.0,
+        "p99_ns": 17000.0,
+        "operations_per_second": 126209.0
+      },
+      {
+        "scenario": "error_with_trace_filtered",
+        "samples": 5000.0,
+        "operations_per_sample": 1.0,
+        "p50_ns": 7042.0,
+        "p95_ns": 7500.0,
+        "p99_ns": 21750.0,
+        "operations_per_second": 132764.0
+      },
+      {
+        "scenario": "file_report",
+        "samples": 2000.0,
+        "operations_per_sample": 1.0,
+        "p50_ns": 97208.0,
+        "p95_ns": 139833.0,
+        "p99_ns": 321750.0,
+        "operations_per_second": 9387.61
+      },
+      {
+        "scenario": "throttled_report",
+        "samples": 10000.0,
+        "operations_per_sample": 10.0,
+        "p50_ns": 104.2,
+        "p95_ns": 112.5,
+        "p99_ns": 116.7,
+        "operations_per_second": 9316190.0
+      }
+    ],
+    [
+      {
+        "scenario": "successful_operation",
+        "samples": 1000.0,
+        "operations_per_sample": 100.0,
+        "p50_ns": 6.67,
+        "p95_ns": 7.09,
+        "p99_ns": 7.5,
+        "operations_per_second": 143062000.0
+      },
+      {
+        "scenario": "error_without_trace_filtered",
+        "samples": 5000.0,
+        "operations_per_sample": 1.0,
+        "p50_ns": 6917.0,
+        "p95_ns": 7084.0,
+        "p99_ns": 20709.0,
+        "operations_per_second": 129734.0
+      },
+      {
+        "scenario": "error_with_trace_filtered",
+        "samples": 5000.0,
+        "operations_per_sample": 1.0,
+        "p50_ns": 7041.0,
+        "p95_ns": 7167.0,
+        "p99_ns": 16208.0,
+        "operations_per_second": 136425.0
+      },
+      {
+        "scenario": "file_report",
+        "samples": 2000.0,
+        "operations_per_sample": 1.0,
+        "p50_ns": 132541.0,
+        "p95_ns": 425875.0,
+        "p99_ns": 592750.0,
+        "operations_per_second": 5076.66
+      },
+      {
+        "scenario": "throttled_report",
+        "samples": 10000.0,
+        "operations_per_sample": 10.0,
+        "p50_ns": 104.2,
+        "p95_ns": 191.7,
+        "p99_ns": 200.0,
+        "operations_per_second": 8613480.0
+      }
+    ]
+  ]
+}

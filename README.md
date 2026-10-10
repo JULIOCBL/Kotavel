@@ -2,16 +2,19 @@
 
 Creado por **Julio Cesar Borges Lopez**. Distribuido bajo la [licencia MIT](LICENSE).
 
-Base de framework C++23 cuya arquitectura y métodos están por definir.
-Actualmente expone `Kotavel::Core` como target CMake `INTERFACE`, sin biblioteca
-compilada, servidor ni dependencias externas.
+Framework C++23 en desarrollo. `Kotavel::Core` es una biblioteca estática con
+ciclo de vida síncrono, recuperación explícita de operaciones y diagnóstico
+a archivo y consola, con ubicación, trazas y presentación por entorno. No tiene dependencias externas ni servidor.
+
+Consulta [el uso del núcleo](docs/core.md) para configurar registros y errores.
 
 El [blueprint propuesto de Kotavel](docs/blueprint/README.md) define la estructura,
-las etapas de implementación y los criterios de rendimiento del framework.
+las etapas de implementación y los criterios de rendimiento del framework. Los [microbenchmarks](benchmarks/README.md)
+permiten reproducir las primeras mediciones del núcleo.
 
 ```text
-include/kotavel/   Carpeta reservada para futuras cabeceras
-src/              Carpeta reservada para futura implementación
+include/kotavel/   Interfaces públicas del núcleo y módulos reservados
+src/              Implementación del núcleo y módulos reservados
 CMakeLists.txt    Target público e instalación
 conanfile.py      Resolución de dependencias y empaquetado
 tools/kotavel_cli/ Herramientas Python compartidas
@@ -24,9 +27,8 @@ benchmarks/       Mediciones futuras de rendimiento
 docs/blueprint/   Diseño propuesto y decisiones pendientes
 ```
 
-Las carpetas reservadas solo contienen `.gitkeep`. Añadir archivos `.cpp` en
-`src/` no los compila automáticamente: el target se ajustará cuando se defina
-la implementación.
+Los módulos futuros conservan `.gitkeep`. Cada nueva implementación debe
+incorporarse explícitamente a su target CMake.
 
 ## Utilizar desde el Laboratorio
 
@@ -39,7 +41,7 @@ python3 kotavel.py run
 ```
 
 La preparación necesita Python 3.9 o posterior con pip y venv y los requisitos
-del compilador de la plataforma. El ejecutable actual termina inmediatamente.
+del compilador de la plataforma. El ejecutable realiza una operación y termina ordenadamente.
 En macOS y Linux debes tener un compilador compatible con C++23 en el PATH.
 En Windows se necesita Python x64 y PowerShell; el instalador prepara LLVM-MinGW.
 La preparación reutiliza LLVM-MinGW instalado y los binarios nativos de CMake.

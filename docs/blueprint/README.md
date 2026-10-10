@@ -2,7 +2,7 @@
 
 **Kotavel puede combinar la facilidad de desarrollo de Laravel con un runtime eficiente en C++.** Para conseguirlo, debemos diseñar primero una base que permita añadir capacidades sin rehacer el framework. El rendimiento es una prioridad de diseño y debe demostrarse con mediciones reproducibles, junto con corrección y estabilidad.
 
-Este documento es una propuesta. Actualmente existe el target `Kotavel::Core`, de tipo `INTERFACE`, y las herramientas Python del proyecto. Las carpetas nuevas reservan espacio para componentes futuros; no representan servicios implementados. Añadir un `.cpp` requerirá incorporarlo explícitamente al target correspondiente en CMake.
+Este documento describe la arquitectura objetivo. Existe una primera implementación estática de `Kotavel::Core` con ciclo de vida síncrono, diagnóstico con ubicación/trazas y presentación de errores por entorno, documentada en [Uso del núcleo](../core.md), además de las herramientas Python. Los demás componentes siguen reservados. Esta primera entrega aún requiere validación nativa en Windows y Linux y validación de rendimiento representativa antes de cumplir todos los criterios de aceptación. Existen [microbenchmarks exploratorios](../../benchmarks/README.md), todavía sin presupuesto de producción. Cada `.cpp` se incorpora explícitamente a su target CMake.
 
 **La continuidad controlada de la aplicación y la facilidad de depuración son requisitos fundamentales del núcleo.** Un fallo recuperable de una operación debe quedar aislado, con información suficiente para investigarlo y sin detener las demás operaciones. El rendimiento se evaluará junto con estos requisitos.
 

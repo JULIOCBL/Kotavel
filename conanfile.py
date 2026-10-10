@@ -14,9 +14,9 @@ class KotavelConan(ConanFile):
     version = "0.1.0"
     license = "MIT"
     author = "Julio Cesar Borges Lopez"
-    package_type = "header-library"
+    package_type = "static-library"
     settings = "os", "compiler", "build_type", "arch"
-    exports_sources = "CMakeLists.txt", "include/*", "src/*", "LICENSE"
+    exports_sources = "CMakeLists.txt", "include/*", "src/*", "cmake/*", "LICENSE"
     default_options = FRAMEWORK_OPTIONS
 
     def requirements(self):
@@ -28,7 +28,9 @@ class KotavelConan(ConanFile):
 
     def generate(self):
         CMakeDeps(self).generate()
-        CMakeToolchain(self).generate()
+        toolchain = CMakeToolchain(self)
+        toolchain.variables["KOTAVEL_BUILD_TESTS"] = False
+        toolchain.generate()
 
     def build(self):
         cmake = CMake(self)
@@ -44,3 +46,7 @@ class KotavelConan(ConanFile):
         # CMakeDeps expone el mismo target público que la compilación desde carpeta.
         self.cpp_info.set_property("cmake_file_name", "Kotavel")
         self.cpp_info.set_property("cmake_target_name", "Kotavel::Core")
+
+        self.cpp_info.libs = ["kotavel_core"]
+        if self.settings.os == "Linux":
+            self.cpp_info.system_libs = ["pthread"]
