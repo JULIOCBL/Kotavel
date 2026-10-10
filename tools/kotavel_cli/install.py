@@ -67,8 +67,11 @@ def run(args, env):
     elif platform.system() in ('Linux', 'Darwin'):
         executable = Path(command[0])
         if executable.parent == TOOLS / 'python' / 'bin' and executable.name in ('cmake', 'ctest'):
-            candidates = list((TOOLS / 'python' / 'lib').glob(
-                f'python*/site-packages/cmake/data/bin/{executable.name}'))
+            candidates = list(dict.fromkeys(
+                path.resolve()
+                for library in ('lib', 'lib64')
+                for path in (TOOLS / 'python' / library).glob(
+                    f'python*/site-packages/cmake/data/bin/{executable.name}')))
             # An ambiguous or incomplete installation keeps the original launcher.
             if len(candidates) == 1 and candidates[0].is_file() and os.access(candidates[0], os.X_OK):
                 command[0] = str(candidates[0])
@@ -81,7 +84,7 @@ def write_if_changed(path, content, encoding='utf-8'):
 
 
 def prepend_tools_path(env, directory, system):
-    """Keep Windows activation repeatable without changing other PATH entries."""
+    """Keep activation repeatable without changing other PATH entries."""
     directory = str(directory)
     current = env.get('PATH', '')
     if system == 'Windows':
@@ -90,7 +93,10 @@ def prepend_tools_path(env, directory, system):
                    if ntpath.normcase(ntpath.normpath(entry.strip('"'))) != key]
         env['PATH'] = ';'.join([directory, *entries])
     else:
-        env['PATH'] = directory + os.pathsep + current
+        key = os.path.normpath(directory)
+        entries = [entry for entry in current.split(os.pathsep)
+                   if os.path.normpath(entry) != key]
+        env['PATH'] = os.pathsep.join([directory, *entries])
 
 
 def installed_windows_platform(config, env):

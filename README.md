@@ -40,6 +40,12 @@ se colocan al principio del PATH sin acumular copias, incluso con el entorno
 ya activo. Las demás entradas conservan su orden y contenido.
 El README de Laboratory-Kotavel contiene los pasos por sistema.
 
+En Linux, la preparación reutiliza el entorno sin acumular rutas en el PATH.
+CMake y CTest se ejecutan directamente desde sus binarios nativos, también
+cuando Python utiliza `lib64` o un enlace entre `lib` y `lib64`.
+Si no existen `gcc` y `g++` sin sufijo, se busca una pareja versionada disponible
+en el PATH. El perfil conserva C++23 y detecta x86_64 o ARM64.
+
 ## Empaquetar la base
 
 Desde el Laboratorio, abre su entorno local y crea el paquete:

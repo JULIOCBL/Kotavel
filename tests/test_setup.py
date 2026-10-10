@@ -101,11 +101,11 @@ class WindowsOptimizationTests(unittest.TestCase):
             setup.prepend_tools_path(env, 'C:\\Tools\\bin', 'Windows')
             self.assertEqual(env['PATH'], 'C:\\Tools\\bin;C:\\Other;;C:\\Other')
 
-    def test_posix_path_keeps_existing_behavior(self):
+    def test_posix_path_removes_repeated_tools_directory(self):
         for system in ('Darwin', 'Linux'):
             env = {'PATH': '/usr/bin:/tools'}
             setup.prepend_tools_path(env, '/tools', system)
-            self.assertEqual(env['PATH'], '/tools' + os.pathsep + '/usr/bin:/tools')
+        self.assertEqual(env['PATH'], '/tools' + os.pathsep + '/usr/bin')
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -225,6 +225,25 @@ class WindowsOptimizationTests(unittest.TestCase):
 
 @unittest.skipIf(os.name == 'nt', 'Requires a POSIX shell')
 class LinuxOptimizationTests(unittest.TestCase):
+    def test_path_is_repeatable_and_preserves_other_entries(self):
+        directory = '/tools with spaces/bin'
+        env = {'PATH': '/usr/bin:/tools with spaces/bin/:/Tools/bin::/usr/bin'}
+        setup.prepend_tools_path(env, directory, 'Linux')
+        expected = directory + ':/usr/bin:/Tools/bin::/usr/bin'
+        self.assertEqual(env['PATH'], expected)
+        setup.prepend_tools_path(env, directory, 'Linux')
+        self.assertEqual(env['PATH'], expected)
+
+    def test_native_cmake_supports_lib64_and_linked_library_directories(self):
+        launcher = self.root / 'python/bin/cmake'
+        native = self.executable(self.root / 'python/lib64/python3.14/site-packages/cmake/data/bin/cmake')
+        for linked in (False, True):
+            if linked:
+                (self.root / 'python/lib').symlink_to('lib64', target_is_directory=True)
+            with self.subTest(linked=linked), patch.object(setup.platform, 'system', return_value='Linux'), patch.object(setup.shutil, 'which', return_value=str(launcher)), patch.object(setup.subprocess, 'run') as run:
+                setup.run(['cmake', '--version'], {})
+                self.assertEqual(run.call_args.args[0], [str(native.resolve()), '--version'])
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
