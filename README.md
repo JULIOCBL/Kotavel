@@ -6,6 +6,9 @@ Base de framework C++23 cuya arquitectura y métodos están por definir.
 Actualmente expone `Kotavel::Core` como target CMake `INTERFACE`, sin biblioteca
 compilada, servidor ni dependencias externas.
 
+El [blueprint propuesto de Kotavel](docs/blueprint/README.md) define la estructura,
+las etapas de implementación y los criterios de rendimiento del framework.
+
 ```text
 include/kotavel/   Carpeta reservada para futuras cabeceras
 src/              Carpeta reservada para futura implementación
@@ -14,6 +17,11 @@ conanfile.py      Resolución de dependencias y empaquetado
 tools/kotavel_cli/ Herramientas Python compartidas
 pyproject.toml    Paquete kotavel-tools
 tests/            Pruebas de las herramientas
+adapters/         Integraciones futuras con bibliotecas externas
+templates/application/ Plantilla futura para proyectos consumidores
+examples/         Ejemplos futuros de consumo
+benchmarks/       Mediciones futuras de rendimiento
+docs/blueprint/   Diseño propuesto y decisiones pendientes
 ```
 
 Las carpetas reservadas solo contienen `.gitkeep`. Añadir archivos `.cpp` en
