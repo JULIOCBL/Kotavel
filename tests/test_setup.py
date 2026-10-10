@@ -95,6 +95,18 @@ class ProfileTests(unittest.TestCase):
                 setup.prepare_platform('Windows', config, {'PATH': ''}, False)
 
 class WindowsOptimizationTests(unittest.TestCase):
+    def test_repeated_activation_keeps_path_stable_and_preserves_other_entries(self):
+        env = {'PATH': 'C:\\Other;;"c:/TOOLS/bin/";C:\\Other;C:\\Tools\\bin'}
+        for _ in range(3):
+            setup.prepend_tools_path(env, 'C:\\Tools\\bin', 'Windows')
+            self.assertEqual(env['PATH'], 'C:\\Tools\\bin;C:\\Other;;C:\\Other')
+
+    def test_posix_path_keeps_existing_behavior(self):
+        for system in ('Darwin', 'Linux'):
+            env = {'PATH': '/usr/bin:/tools'}
+            setup.prepend_tools_path(env, '/tools', system)
+            self.assertEqual(env['PATH'], '/tools' + os.pathsep + '/usr/bin:/tools')
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -123,7 +135,7 @@ class WindowsOptimizationTests(unittest.TestCase):
             prepared = setup.prepare_platform('Windows', self.config, env, False)
         run.assert_not_called()
         self.assertEqual(prepared['compiler_bin'], str(binary))
-        self.assertEqual(env['PATH'], str(binary) + os.pathsep + 'existing-path')
+        self.assertEqual(env['PATH'], str(binary) + ';existing-path')
         self.assertEqual(prepared['shell'], ['pwsh.exe', '-NoLogo', '-NoProfile'])
         self.assertEqual(json.loads((self.tools / 'platform.json').read_text(encoding='utf-8-sig')), prepared)
 

@@ -4,6 +4,7 @@ import configparser
 import importlib.util
 import io
 import json
+import ntpath
 import os
 from pathlib import Path
 import platform
@@ -79,6 +80,19 @@ def write_if_changed(path, content, encoding='utf-8'):
         path.write_text(content, encoding=encoding)
 
 
+def prepend_tools_path(env, directory, system):
+    """Keep Windows activation repeatable without changing other PATH entries."""
+    directory = str(directory)
+    current = env.get('PATH', '')
+    if system == 'Windows':
+        key = ntpath.normcase(ntpath.normpath(directory))
+        entries = [entry for entry in current.split(';')
+                   if ntpath.normcase(ntpath.normpath(entry.strip('"'))) != key]
+        env['PATH'] = ';'.join([directory, *entries])
+    else:
+        env['PATH'] = directory + os.pathsep + current
+
+
 def installed_windows_platform(config, env):
     """Reuse an installed LLVM-MinGW; leave installation to PowerShell."""
     if config['settings']['compiler'] != 'clang':
@@ -111,7 +125,7 @@ def prepare_platform(system, config, env, configure_only):
         prepared = installed_windows_platform(config, env)
         if prepared is not None:
             write_if_changed(manifest, json.dumps(prepared), encoding='utf-8-sig')
-            env['PATH'] = prepared['compiler_bin'] + os.pathsep + env.get('PATH', '')
+            prepend_tools_path(env, prepared['compiler_bin'], system)
             return prepared
     manifest.unlink(missing_ok=True)
     if system == 'Windows':
@@ -132,7 +146,7 @@ def prepare_platform(system, config, env, configure_only):
     with manifest.open(encoding='utf-8-sig') as source:
         prepared = json.load(source)
     if prepared['compiler_bin']:
-        env['PATH'] = prepared['compiler_bin'] + os.pathsep + env.get('PATH', '')
+        prepend_tools_path(env, prepared['compiler_bin'], system)
     return prepared
 
 
@@ -265,7 +279,7 @@ def main(argv=None):
     prepared = prepare_platform(system, config, env, args.configure_only)
     scripts = TOOLS / 'python' / prepared['scripts_directory']
     python = scripts / prepared['python_executable']
-    env['PATH'] = str(scripts) + os.pathsep + env.get('PATH', '')
+    prepend_tools_path(env, scripts, system)
     if not args.configure_only:
         if not python.is_file():
             venv.EnvBuilder(with_pip=True).create(TOOLS / 'python')

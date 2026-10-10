@@ -34,6 +34,10 @@ La preparación necesita Python 3.9 o posterior con pip y venv y los requisitos
 del compilador de la plataforma. El ejecutable actual termina inmediatamente.
 En macOS y Linux debes tener un compilador compatible con C++23 en el PATH.
 En Windows se necesita Python x64 y PowerShell; el instalador prepara LLVM-MinGW.
+La preparación reutiliza LLVM-MinGW instalado y los binarios nativos de CMake.
+Al repetir la preparación en Windows, las rutas de las herramientas locales
+se colocan al principio del PATH sin acumular copias, incluso con el entorno
+ya activo. Las demás entradas conservan su orden y contenido.
 El README de Laboratory-Kotavel contiene los pasos por sistema.
 
 ## Empaquetar la base
