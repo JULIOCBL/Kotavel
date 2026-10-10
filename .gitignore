@@ -1,0 +1,31 @@
+# Salidas de CMake y Conan locales al repositorio.
+/build/
+/CMakeUserPresets.json
+/CMakeCache.txt
+/CMakeFiles/
+/Testing/
+/compile_commands.json
+
+# Entorno y artefactos generados por Python.
+/.kotavel/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+/dist/
+/wheelhouse/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+/htmlcov/
+
+# Archivos temporales del sistema y del IDE.
+.DS_Store
+Thumbs.db
+.vs/
+*.user
+*.suo

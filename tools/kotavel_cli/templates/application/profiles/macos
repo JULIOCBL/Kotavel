@@ -1,0 +1,10 @@
+[settings]
+os=Macos
+compiler=apple-clang
+compiler.libcxx=libc++
+compiler.cppstd=23
+build_type=Debug
+
+[conf]
+tools.cmake.cmaketoolchain:generator=Ninja
+

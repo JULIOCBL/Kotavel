@@ -1,0 +1,11 @@
+[settings]
+os=Windows
+compiler=clang
+compiler.libcxx=libc++
+compiler.cppstd=23
+build_type=Debug
+
+[conf]
+# Compatibilidad de fmt 11.2 con libc++ reciente.
+tools.build:cxxflags=["-include", "cstdlib"]
+tools.cmake.cmaketoolchain:generator=Ninja
