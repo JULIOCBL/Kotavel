@@ -205,7 +205,7 @@ def prepare_environment(offline):
 
 def main(argv=None):
     global ROOT, TOOLS
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog='python3 kotavel.py install', description=__doc__)
     parser.add_argument('--project', type=Path, help='Raíz del proyecto consumidor')
     parser.add_argument('action', nargs='?', default='install', choices=['install', 'add'])
     parser.add_argument('dependency', nargs='?', help='Nombre o nombre/versión de Conan')

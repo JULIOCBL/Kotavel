@@ -253,7 +253,7 @@ def main(argv=None):
     global ROOT, TOOLS, CONAN_HOME
     if sys.version_info < (3, 9):
         raise RuntimeError('Se necesita Python 3.9 o posterior.')
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(prog='python3 kotavel.py', description=__doc__)
     parser.add_argument('--project', type=Path, help='Raíz del proyecto consumidor')
     parser.add_argument('--test', action='store_true', help='Ejecuta CTest sobre una compilación existente')
     parser.add_argument('--framework', action='store_true', help='Compila y prueba el núcleo de Kotavel local (con --test)')
