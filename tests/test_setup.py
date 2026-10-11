@@ -103,9 +103,10 @@ class WindowsOptimizationTests(unittest.TestCase):
 
     def test_posix_path_removes_repeated_tools_directory(self):
         for system in ('Darwin', 'Linux'):
-            env = {'PATH': '/usr/bin:/tools'}
-            setup.prepend_tools_path(env, '/tools', system)
-        self.assertEqual(env['PATH'], '/tools' + os.pathsep + '/usr/bin')
+            with self.subTest(system=system):
+                env = {'PATH': os.pathsep.join(['/usr/bin', '/tools'])}
+                setup.prepend_tools_path(env, '/tools', system)
+                self.assertEqual(env['PATH'], os.pathsep.join(['/tools', '/usr/bin']))
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

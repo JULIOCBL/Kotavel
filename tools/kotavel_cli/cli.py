@@ -34,7 +34,7 @@ class CommandHelpParser(argparse.ArgumentParser):
         for command, description in [
             ('install add nombre/version', 'Añade una dependencia sin duplicarla.'),
             ('install --offline', 'Usa solo la caché local.'),
-            ('test --framework', 'Compila y prueba el núcleo local de Kotavel.'),
+            ('test --framework', 'Comprueba Python, núcleo e integración local.'),
         ]:
             lines.append(row(command, description))
         lines.extend(['', paint('Opciones:', '1;36')])
@@ -61,7 +61,7 @@ def main(argv=None):
         'prepare': 'Prepara las herramientas, el compilador y el perfil del proyecto.',
         'install': 'Instala dependencias con Conan y actualiza conan.lock.',
         'build': 'Instala dependencias, compila el proyecto y ejecuta sus pruebas.',
-        'test': 'Ejecuta las pruebas del proyecto; --framework compila y prueba Kotavel.',
+        'test': 'Ejecuta las pruebas del proyecto; --framework comprueba Python, núcleo e integración local.',
         'run': 'Compila, prueba y ejecuta la aplicación.',
         'shell': 'Abre una terminal con las herramientas del proyecto activas.',
     }

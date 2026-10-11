@@ -2,6 +2,7 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -43,6 +44,44 @@ class ConsumerToolsTests(unittest.TestCase):
         with patch.object(install, 'ROOT', self.root), patch.object(install, 'prepare_platform') as prepare, patch('sys.stderr'):
             self.assertEqual(cli.main(['--project', str(self.root), 'test', '--framework']), 1)
             prepare.assert_not_called()
+
+    def test_framework_validation_runs_all_suites_and_stops_on_each_failure(self):
+        framework = self.root / 'framework with spaces'
+        for source in (framework, self.root):
+            (source / 'tests').mkdir(parents=True)
+            (source / 'tests' / 'test_example.py').touch()
+        config = {'conf': {'tools.build:compiler_executables': json.dumps({'cpp': '/selected compiler/clang++'})}}
+        python = '/selected python/python'
+        for build_type in ('Debug', 'Release'):
+            for failure in (None, *range(9)):
+                commands = []
+                def execute(command, env):
+                    commands.append([str(arg) for arg in command])
+                    if len(commands) - 1 == failure:
+                        raise subprocess.CalledProcessError(1, command)
+                with self.subTest(build_type=build_type, failure=failure), patch.object(install, 'ROOT', self.root), patch.object(install, 'run', side_effect=execute), patch('builtins.print'):
+                    if failure is None:
+                        install.test_framework(framework, build_type, config, python, {})
+                    else:
+                        with self.assertRaises(subprocess.CalledProcessError):
+                            install.test_framework(framework, build_type, config, python, {})
+                self.assertEqual(len(commands), 9 if failure is None else failure + 1)
+                if failure is None:
+                    self.assertEqual(commands[0], [python, '-m', 'unittest', 'discover', '-s', str(framework / 'tests'), '-p', 'test_*.py'])
+                    self.assertEqual(commands[1][5], str(self.root / 'tests'))
+                    self.assertIn('-DCMAKE_CXX_COMPILER=/selected compiler/clang++', commands[2])
+                    self.assertIn('-DCMAKE_BUILD_TYPE=' + build_type, commands[2])
+                    self.assertEqual(commands[5], ['conan', 'install', '.', '--build=missing'])
+                    self.assertIn('-DBUILD_TESTING=ON', commands[6])
+                    self.assertIn('conan-' + build_type.lower(), commands[8])
+                    for index in (4, 8):
+                        self.assertIn('--no-tests=error', commands[index])
+
+    def test_framework_validation_rejects_missing_python_suites(self):
+        with patch.object(install, 'ROOT', self.root), patch.object(install, 'run') as run:
+            with self.assertRaisesRegex(RuntimeError, 'pruebas Python'):
+                install.test_framework(self.root / 'missing', 'Debug', {}, sys.executable, {})
+            run.assert_not_called()
 
     def test_consumer_executable_is_configurable_and_rejects_paths(self):
         with patch.object(install, 'ROOT', self.root):

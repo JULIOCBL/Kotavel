@@ -9,6 +9,7 @@
 # Entorno y artefactos generados por Python.
 /.kotavel/
 .venv/
+/.python-version
 __pycache__/
 *.py[cod]
 *.egg-info/
