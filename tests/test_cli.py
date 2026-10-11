@@ -32,6 +32,18 @@ class ConsumerToolsTests(unittest.TestCase):
             self.assertEqual(cli.main(['--project', str(self.root), 'prepare']), 1)
             prepare.assert_not_called()
 
+    def test_framework_tests_forward_scope_to_installer(self):
+        with patch.object(install, 'main') as command:
+            self.assertEqual(cli.main(['--project', str(self.root), 'test', '--framework']), 0)
+        command.assert_called_once_with(['--test', '--framework', '--project', str(self.root.resolve())])
+
+    def test_framework_tests_reject_package_mode_before_preparation(self):
+        (self.root / 'conanfile.py').write_text('')
+        (self.root / 'kotavel.json').write_text(json.dumps({'mode': 'package'}))
+        with patch.object(install, 'ROOT', self.root), patch.object(install, 'prepare_platform') as prepare, patch('sys.stderr'):
+            self.assertEqual(cli.main(['--project', str(self.root), 'test', '--framework']), 1)
+            prepare.assert_not_called()
+
     def test_consumer_executable_is_configurable_and_rejects_paths(self):
         with patch.object(install, 'ROOT', self.root):
             (self.root / 'kotavel.json').write_text(json.dumps({'executable': 'another-app'}))

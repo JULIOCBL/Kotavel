@@ -45,6 +45,10 @@ trazas por hilo y rechazo de carpetas compartidas. Python 3 ejecuta también una
 prueba con dos procesos reales y comprueba que el bloqueo se libera al cerrar.
 Las pruebas del núcleo requieren ahora Python 3, además de CMake y C++23.
 
+Desde un consumidor configurado en modo local también puedes compilar y probar
+el núcleo con `python3 kotavel.py test --framework`. Usa el perfil del consumidor
+y guarda la compilación en su carpeta `build/framework-tests/<Debug|Release>`.
+
 `.github/workflows/core.yml` prepara Debug/Release en Windows, Linux y macOS,
 además de ASan/UBSan y TSan en trabajos separados de Linux. La matriz no demuestra
 compatibilidad hasta que termine correctamente en GitHub. En Windows esa matriz

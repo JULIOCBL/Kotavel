@@ -256,18 +256,32 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--project', type=Path, help='Raíz del proyecto consumidor')
     parser.add_argument('--test', action='store_true', help='Ejecuta CTest sobre una compilación existente')
+    parser.add_argument('--framework', action='store_true', help='Compila y prueba el núcleo de Kotavel local (con --test)')
     parser.add_argument('--build-type', choices=('Debug', 'Release'))
     parser.add_argument('--build', action='store_true')
     parser.add_argument('--run', action='store_true', help='Compila, prueba y ejecuta el consumidor')
     parser.add_argument('--shell', action='store_true', help='Entra en una terminal con las herramientas activas')
     parser.add_argument('--configure-only', action='store_true', help='Reutiliza las herramientas existentes sin descargar nada')
     args = parser.parse_args(argv)
+    if args.framework and (not args.test or args.build or args.run or args.shell):
+        parser.error('--framework solo se utiliza con el comando test')
     if args.project is not None:
         ROOT = args.project.resolve()
         TOOLS = ROOT / '.kotavel' / 'tools'
         CONAN_HOME = ROOT / '.kotavel' / 'conan'
     if not (ROOT / 'conanfile.py').is_file():
         raise RuntimeError(f'No se encontró conanfile.py en {ROOT}')
+    framework_source = None
+    if args.framework:
+        settings = json.loads((ROOT / 'kotavel.json').read_text(encoding='utf-8-sig'))
+        if settings.get('mode') != 'local':
+            raise RuntimeError('Las pruebas del framework requieren mode local en kotavel.json.')
+        source_dir = settings.get('source_dir')
+        if not isinstance(source_dir, str) or not source_dir.strip():
+            raise RuntimeError('kotavel.json requiere source_dir para probar el framework local.')
+        framework_source = (ROOT / source_dir).resolve()
+        if not (framework_source / 'tests' / 'unit' / 'core_tests.cpp').is_file():
+            raise RuntimeError(f'No se encontraron las pruebas de Kotavel en {framework_source}')
     if args.shell and not sys.stdin.isatty():
         raise RuntimeError('--shell requiere una terminal interactiva; en CI utiliza --build.')
     system = platform.system()
@@ -323,7 +337,16 @@ def main(argv=None):
                 raise RuntimeError(f'No se encontró el ejecutable generado: {executable}')
             run([executable], env)
     if args.test and not args.build and not args.run:
-        run(['ctest', '--preset', 'conan-' + build_type.lower(), '--output-on-failure'], env)
+        if framework_source is not None:
+            destination = ROOT / 'build' / 'framework-tests' / build_type
+            run(['cmake', '-S', str(framework_source), '-B', str(destination),
+                 '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=' + build_type,
+                 '-DKOTAVEL_BUILD_TESTS=ON', '-DPython3_EXECUTABLE=' + sys.executable], env)
+            run(['cmake', '--build', str(destination), '--config', build_type], env)
+            run(['ctest', '--test-dir', str(destination), '-C', build_type,
+                 '--output-on-failure'], env)
+        else:
+            run(['ctest', '--preset', 'conan-' + build_type.lower(), '--output-on-failure'], env)
     success_banner(system, 'run' if args.run else 'build' if args.build else 'test' if args.test else 'prepare')
     if args.shell:
         enter_shell(prepared, env)
