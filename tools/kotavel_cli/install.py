@@ -249,6 +249,36 @@ def profile_label(path):
         return 'perfil predeterminado: ' + path.name
 
 
+def test_framework(framework_source, build_type, config, python, env):
+    """Validate tools, consumer, runtime and integration; stop on first failure."""
+    suites = (framework_source / 'tests', ROOT / 'tests')
+    for suite in suites:
+        if not any(suite.glob('test_*.py')):
+            raise RuntimeError(f'No se encontraron pruebas Python en {suite}')
+    for index, suite in enumerate(suites, 1):
+        print(f'[{index}/4] Pruebas Python: {suite}', flush=True)
+        run([python, '-m', 'unittest', 'discover', '-s', suite, '-p', 'test_*.py'], env)
+
+    print('[3/4] Compilación y pruebas del núcleo de Kotavel', flush=True)
+    destination = ROOT / 'build' / 'framework-tests' / build_type
+    compilers = json.loads(config['conf']['tools.build:compiler_executables'])
+    run(['cmake', '-S', framework_source, '-B', destination,
+         '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=' + build_type,
+         '-DCMAKE_CXX_COMPILER=' + compilers['cpp'],
+         '-DKOTAVEL_BUILD_TESTS=ON', '-DPython3_EXECUTABLE=' + str(python)], env)
+    run(['cmake', '--build', destination, '--config', build_type], env)
+    run(['ctest', '--test-dir', destination, '-C', build_type,
+         '--output-on-failure', '--no-tests=error'], env)
+
+    print('[4/4] Compilación y pruebas de integración del consumidor', flush=True)
+    preset = 'conan-' + build_type.lower()
+    for command in (['conan', 'install', '.', '--build=missing'],
+                    ['cmake', '--preset', preset, '-DBUILD_TESTING=ON'],
+                    ['cmake', '--build', '--preset', preset],
+                    ['ctest', '--preset', preset, '--output-on-failure', '--no-tests=error']):
+        run(command, env)
+
+
 def main(argv=None):
     global ROOT, TOOLS, CONAN_HOME
     if sys.version_info < (3, 9):
@@ -256,7 +286,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog='python3 kotavel.py', description=__doc__)
     parser.add_argument('--project', type=Path, help='Raíz del proyecto consumidor')
     parser.add_argument('--test', action='store_true', help='Ejecuta CTest sobre una compilación existente')
-    parser.add_argument('--framework', action='store_true', help='Compila y prueba el núcleo de Kotavel local (con --test)')
+    parser.add_argument('--framework', action='store_true', help='Comprueba herramientas Python, núcleo e integración del consumidor local (con --test)')
     parser.add_argument('--build-type', choices=('Debug', 'Release'))
     parser.add_argument('--build', action='store_true')
     parser.add_argument('--run', action='store_true', help='Compila, prueba y ejecuta el consumidor')
@@ -338,13 +368,7 @@ def main(argv=None):
             run([executable], env)
     if args.test and not args.build and not args.run:
         if framework_source is not None:
-            destination = ROOT / 'build' / 'framework-tests' / build_type
-            run(['cmake', '-S', str(framework_source), '-B', str(destination),
-                 '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=' + build_type,
-                 '-DKOTAVEL_BUILD_TESTS=ON', '-DPython3_EXECUTABLE=' + sys.executable], env)
-            run(['cmake', '--build', str(destination), '--config', build_type], env)
-            run(['ctest', '--test-dir', str(destination), '-C', build_type,
-                 '--output-on-failure'], env)
+            test_framework(framework_source, build_type, config, python, env)
         else:
             run(['ctest', '--preset', 'conan-' + build_type.lower(), '--output-on-failure'], env)
     success_banner(system, 'run' if args.run else 'build' if args.build else 'test' if args.test else 'prepare')
