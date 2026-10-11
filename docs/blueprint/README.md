@@ -80,6 +80,9 @@ Kotavel/
 
 Las herramientas Python pertenecen al framework. Cada consumidor conserva su configuración, receta, lockfile, perfiles y entrada `kotavel.py`. Los perfiles predeterminados ya empaquetados en `tools/kotavel_cli/templates/application/profiles/` siguen siendo recursos de las herramientas; `templates/application/` reserva la futura plantilla completa de una aplicación.
 
+El Laboratorio ya utiliza `bootstrap/main.cpp` como entrada de su ejecutable.
+El arranque pertenece al consumidor; el núcleo reutilizable permanece en Kotavel.
+
 Como objetivo futuro, esa plantilla separaría `app/` para código propio, `bootstrap/` para arranque, `config/` para configuración y `tests/` para pruebas, además de sus archivos CMake, Conan y Kotavel. El consumidor podrá usar el framework desde una carpeta local o desde una versión publicada. La publicación remota y la generación de proyectos todavía deben implementarse.
 
 ## Arranque, dependencias y cierre
