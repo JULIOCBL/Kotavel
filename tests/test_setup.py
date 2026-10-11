@@ -247,7 +247,7 @@ class LinuxOptimizationTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        self.root = Path(temporary.name).resolve()
         patcher = patch.object(setup, 'TOOLS', self.root)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -393,8 +393,8 @@ class MacOptimizationTests(unittest.TestCase):
             run.assert_not_called()
 
     def test_native_tools_preserve_fallbacks_and_external_selection(self):
-        with tempfile.TemporaryDirectory() as directory, patch.object(setup, 'TOOLS', Path(directory)), patch.object(setup.platform, 'system', return_value='Darwin'):
-            root = Path(directory)
+        with tempfile.TemporaryDirectory() as directory, patch.object(setup, 'TOOLS', Path(directory).resolve()), patch.object(setup.platform, 'system', return_value='Darwin'):
+            root = Path(directory).resolve()
             for name in ('cmake', 'ctest'):
                 launcher = root / 'python/bin' / name
                 native = root / 'python/lib/python3.14/site-packages/cmake/data/bin' / name
