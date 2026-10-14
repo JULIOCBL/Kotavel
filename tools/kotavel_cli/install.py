@@ -249,6 +249,11 @@ def profile_label(path):
         return 'perfil predeterminado: ' + path.name
 
 
+def has_framework_cpp_tests(framework_source):
+    """Detecta la estructura agrupada mediante la suite base del núcleo."""
+    return (framework_source / 'tests' / 'unit' / 'core' / 'core_tests.cpp').is_file()
+
+
 def test_framework(framework_source, build_type, config, python, env):
     """Validate tools, consumer, runtime and integration; stop on first failure."""
     suites = (framework_source / 'tests', ROOT / 'tests')
@@ -289,10 +294,13 @@ def main(argv=None):
     parser.add_argument('--framework', action='store_true', help='Comprueba herramientas Python, núcleo e integración del consumidor local (con --test)')
     parser.add_argument('--build-type', choices=('Debug', 'Release'))
     parser.add_argument('--build', action='store_true')
+    parser.add_argument('--env', choices=('local', 'development', 'production'), help='Archivo de entorno al ejecutar run')
     parser.add_argument('--run', action='store_true', help='Compila, prueba y ejecuta el consumidor')
     parser.add_argument('--shell', action='store_true', help='Entra en una terminal con las herramientas activas')
     parser.add_argument('--configure-only', action='store_true', help='Reutiliza las herramientas existentes sin descargar nada')
     args = parser.parse_args(argv)
+    if args.env and not args.run:
+        parser.error('--env solo se utiliza con run')
     if args.framework and (not args.test or args.build or args.run or args.shell):
         parser.error('--framework solo se utiliza con el comando test')
     if args.project is not None:
@@ -310,7 +318,7 @@ def main(argv=None):
         if not isinstance(source_dir, str) or not source_dir.strip():
             raise RuntimeError('kotavel.json requiere source_dir para probar el framework local.')
         framework_source = (ROOT / source_dir).resolve()
-        if not (framework_source / 'tests' / 'unit' / 'core_tests.cpp').is_file():
+        if not has_framework_cpp_tests(framework_source):
             raise RuntimeError(f'No se encontraron las pruebas de Kotavel en {framework_source}')
     if args.shell and not sys.stdin.isatty():
         raise RuntimeError('--shell requiere una terminal interactiva; en CI utiliza --build.')
@@ -365,7 +373,7 @@ def main(argv=None):
             executable = ROOT / 'build' / build_type / (name + '.exe' if system == 'Windows' else name)
             if not executable.is_file():
                 raise RuntimeError(f'No se encontró el ejecutable generado: {executable}')
-            run([executable], env)
+            run([executable, '--env=' + (args.env or 'production'), '--project-root=' + str(ROOT)], env)
     if args.test and not args.build and not args.run:
         if framework_source is not None:
             test_framework(framework_source, build_type, config, python, env)

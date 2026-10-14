@@ -83,6 +83,18 @@ class ConsumerToolsTests(unittest.TestCase):
                 install.test_framework(self.root / 'missing', 'Debug', {}, sys.executable, {})
             run.assert_not_called()
 
+    def test_framework_detection_uses_grouped_core_test_directory(self):
+        framework = self.root / 'framework'
+        grouped_core_test = framework / 'tests' / 'unit' / 'core' / 'core_tests.cpp'
+        grouped_core_test.parent.mkdir(parents=True)
+        grouped_core_test.touch()
+        self.assertTrue(install.has_framework_cpp_tests(framework))
+
+        old_layout_test = framework / 'tests' / 'unit' / 'core_tests.cpp'
+        old_layout_test.touch()
+        grouped_core_test.unlink()
+        self.assertFalse(install.has_framework_cpp_tests(framework))
+
     def test_consumer_executable_is_configurable_and_rejects_paths(self):
         with patch.object(install, 'ROOT', self.root):
             (self.root / 'kotavel.json').write_text(json.dumps({'executable': 'another-app'}))

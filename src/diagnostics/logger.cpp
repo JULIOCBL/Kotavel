@@ -1,8 +1,8 @@
 #include <kotavel/diagnostics/logger.hpp>
 #include "directory_lease.hpp"
+#include "log_formatter.hpp"
 #include <algorithm>
 #include <cstdio>
-#include <ctime>
 #include <fstream>
 #include <stdexcept>
 #include <string>
@@ -10,41 +10,6 @@
 
 namespace kotavel {
 namespace {
-const char* level_name(LogLevel level) noexcept {
-    switch (level) {
-        case LogLevel::trace: return "trace";
-        case LogLevel::debug: return "debug";
-        case LogLevel::info: return "info";
-        case LogLevel::notice: return "notice";
-        case LogLevel::alert: return "alert";
-        case LogLevel::emergency: return "emergency";
-        case LogLevel::warning: return "warning";
-        case LogLevel::error: return "error";
-        case LogLevel::critical: return "critical";
-    }
-    return nullptr;
-}
-
-// Limita cada campo y escapa controles para impedir inyección de líneas de log.
-std::string quote(std::string_view input, std::size_t limit = 512) {
-    std::string out = "\"";
-    constexpr char hex[] = "0123456789abcdef";
-    auto length = std::min(input.size(), limit);
-    // No cortar un carácter UTF-8 entre sus bytes de continuación.
-    if (length < input.size()) {
-        while (length > 0 && (static_cast<unsigned char>(input[length]) & 0xc0) == 0x80)
-            --length;
-    }
-    for (unsigned char c : input.substr(0, length)) {
-        if (c == '"' || c == '\\') { out += '\\'; out += c; }
-        else if (c < 32) {
-            out += "\\u00"; out += hex[c >> 4]; out += hex[c & 15];
-        } else out += c;
-    }
-    if (input.size() > length) out += "...[truncated]";
-    return out + '"';
-}
-
 void validate_throttle(const ThrottleOptions& options) {
     if (options.interval.count() <= 0 || options.max_keys == 0 || options.max_keys > 4096)
         throw std::invalid_argument("Throttle requires a positive interval and 1 to 4096 keys");
@@ -52,13 +17,14 @@ void validate_throttle(const ThrottleOptions& options) {
 }
 
 Logger::Logger(LogOptions options) : options_(std::move(options)) {
-    if (!level_name(options_.min_level))
+    if (!detail::level_name(options_.min_level))
         throw std::invalid_argument("Invalid minimum log level");
-    if (options_.directory.empty() || options_.max_bytes < 16384 || options_.backups > 100)
+    if ((options_.enabled && options_.file && options_.directory.empty()) || options_.max_bytes < 16384 || options_.backups > 100)
         throw std::invalid_argument("Logger requires a directory, max_bytes >= 16384 and backups <= 100");
     if (options_.module.empty() || options_.module.size() > 64)
         throw std::invalid_argument("Log module requires 1 to 64 bytes");
     validate_throttle(options_.throttle);
+    if (!options_.enabled || !options_.file) return;
     std::filesystem::create_directories(options_.directory);
     lease_ = std::make_unique<DirectoryLease>(options_.directory);
     std::ofstream probe(options_.directory / "kotavel.log", std::ios::app | std::ios::binary);
@@ -114,7 +80,9 @@ bool Logger::report(LogLevel level, std::string_view code, std::string_view oper
 }
 
 ReportStatus Logger::write(const LogRecord& record) noexcept {
-    const auto name = level_name(record.level);
+    // El canal null descarta antes de formatear, bloquear o realizar E/S.
+    if (!options_.enabled) { ++filtered_; return ReportStatus::filtered; }
+    const auto name = detail::level_name(record.level);
     if (!name) {
         ++failed_;
         std::fputs("Kotavel: invalid diagnostic level.\n", stderr);
@@ -128,82 +96,26 @@ ReportStatus Logger::write(const LogRecord& record) noexcept {
             record.causes.size() > 8) throw std::invalid_argument("Invalid log record size");
         validate_context(record.fields);
         if (limited(record, module)) { ++throttled_; return ReportStatus::throttled; }
-        const auto context = record.diagnostic;
-        const auto now = std::time(nullptr);
-        std::tm utc{};
-#ifdef _WIN32
-        if (gmtime_s(&utc, &now) != 0) throw std::runtime_error("Invalid clock");
-#else
-        if (!gmtime_r(&now, &utc)) throw std::runtime_error("Invalid clock");
-#endif
-        char timestamp[32];
-        if (!std::strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", &utc))
-            throw std::runtime_error("Invalid timestamp");
-        auto line = std::string("{\"time\":\"") + timestamp +
-            "\",\"level\":\"" + name + "\",\"module\":" + quote(module) + ",\"code\":" + quote(record.code) +
-            ",\"operation\":" + quote(record.operation) + ",\"message\":" + quote(record.message);
-        std::string extra;
-        bool payload_truncated = false;
-        for (std::size_t limit = 256;; limit /= 2) {
-            extra = ",\"context\":{";
-            bool first = true;
-            for (const auto& field : record.fields) {
-                if (!first) extra += ',';
-                first = false;
-                extra += quote(field.key, 64) + ':' + quote(field.value, limit);
+        const auto line = detail::format_log_record(record, module, name, options_.max_bytes);
+        if (options_.file) {
+            const auto path = options_.directory / "kotavel.log";
+            if (std::filesystem::exists(path) &&
+                std::filesystem::file_size(path) > options_.max_bytes - line.size()) {
+                // Archivos cerrados antes de renombrar: compatible también con Windows.
+                for (unsigned i = options_.backups; i > 0; --i) {
+                    auto dest = path; dest += "." + std::to_string(i);
+                    auto source = path;
+                    if (i > 1) source += "." + std::to_string(i - 1);
+                    std::filesystem::remove(dest);
+                    if (std::filesystem::exists(source)) std::filesystem::rename(source, dest);
+                }
+                if (options_.backups == 0) std::filesystem::remove(path);
             }
-            extra += "},\"causes\":[";
-            first = true;
-            for (const auto& cause : record.causes) {
-                if (!first) extra += ',';
-                first = false;
-                extra += "{\"code\":" + quote(cause.code, limit) + ",\"message\":" +
-                    quote(cause.message, limit) + ",\"file\":" +
-                    quote(cause.context.location.file_name(), limit) + ",\"line\":" +
-                    std::to_string(cause.context.location.line()) + '}';
-            }
-            extra += "]";
-            if (line.size() + extra.size() + 4096 <= options_.max_bytes) break;
-            payload_truncated = true;
-            if (limit == 0) { extra = ",\"context\":{},\"causes\":[]"; break; }
+            std::ofstream file(path, std::ios::app | std::ios::binary);
+            file << line;
+            file.flush();
+            if (!file) throw std::runtime_error("Cannot write Kotavel log file");
         }
-        line += extra + ",\"payload_truncated\":" + (payload_truncated ? "true" : "false");
-        line += std::string(",\"causes_truncated\":") + (record.causes_truncated ? "true" : "false");
-        if (context) {
-            line += ",\"trace_origin\":" + quote(context->origin == TraceOrigin::exception_construction
-                ? "exception_construction" : "handler");
-            line += ",\"file\":" + quote(context->location.file_name(), 256) +
-                ",\"line\":" + std::to_string(context->location.line()) +
-                ",\"function\":" + quote(context->location.function_name(), 256);
-            // Reducir la traza hasta que el registro completo respete el límite.
-            const auto trace = context->stack.format();
-            auto limit = std::size_t{4096};
-            auto encoded = quote(trace, limit);
-            while (line.size() + encoded.size() + 32 > options_.max_bytes && limit > 0) {
-                limit /= 2;
-                encoded = quote(trace, limit);
-            }
-            line += ",\"stack\":" + encoded;
-        }
-        line += "}\n";
-        if (line.size() > options_.max_bytes) throw std::runtime_error("Diagnostic exceeds file limit");
-        const auto path = options_.directory / "kotavel.log";
-        if (std::filesystem::exists(path) &&
-            std::filesystem::file_size(path) > options_.max_bytes - line.size()) {
-            // Archivos cerrados antes de renombrar: compatible también con Windows.
-            for (unsigned i = options_.backups; i > 0; --i) {
-                auto dest = path; dest += "." + std::to_string(i);
-                auto source = path;
-                if (i > 1) source += "." + std::to_string(i - 1);
-                std::filesystem::remove(dest);
-                if (std::filesystem::exists(source)) std::filesystem::rename(source, dest);
-            }
-            if (options_.backups == 0) std::filesystem::remove(path);
-        }
-        std::ofstream file(path, std::ios::app | std::ios::binary);
-        file << line;
-        file.flush();
-        if (!file) throw std::runtime_error("Cannot write Kotavel log file");
         if (options_.console && (std::fwrite(line.data(), 1, line.size(), stderr) != line.size() ||
                                  std::fflush(stderr) != 0))
             throw std::runtime_error("Cannot write diagnostic console");

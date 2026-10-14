@@ -27,6 +27,9 @@ struct LogOptions {
     LogLevel min_level = LogLevel::info;
     std::string module = "application";
     ThrottleOptions throttle{};
+    // Destinos opcionales: stderr y null no deben crear ni bloquear archivos.
+    bool file = true;
+    bool enabled = true;
 };
 struct LogRecord {
     LogLevel level = LogLevel::error;

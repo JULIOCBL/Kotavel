@@ -58,3 +58,39 @@ de compilación; `test` sin `--framework` conserva la ejecución de CTest existe
 además de ASan/UBSan y TSan en trabajos separados de Linux. La matriz no demuestra
 compatibilidad hasta que termine correctamente en GitHub. En Windows esa matriz
 usa MSVC; el toolchain LLVM-MinGW del preparador aún necesita su propia validación.
+
+`kotavel.config` comprueba el mapa plano de configuración en memoria: inserción,
+actualización, tipos, búsquedas con vistas, estabilidad de referencias al insertar
+y errores sin valores sensibles. No modifica archivos de configuración.
+
+`kotavel.config.extended` comprueba grupos completos, listas de escalares y mapas,
+null explícito, lectura múltiple, lotes atómicos y coherencia al sustituir grupos.
+
+`kotavel.config.edge` verifica límites de profundidad, longitud y cantidad de
+nodos; grupos con prefijos parecidos; colisiones y registros inválidos; rollback
+de merges y lotes fallidos; claves repetidas; y restauración del helper en scopes
+anidados. Para ejecutar únicamente las tres suites de configuración:
+
+```sh
+cmake --build build/core --config Debug \
+  --target kotavel_config_tests kotavel_config_extended_tests kotavel_config_edge_tests
+ctest --test-dir build/core -C Debug -R '^kotavel\.config' --output-on-failure
+```
+
+Para ejecutar solo la suite de límites y errores:
+
+```sh
+ctest --test-dir build/core -C Debug -R '^kotavel\.config\.edge$' --output-on-failure
+```
+
+CTest usa los nombres registrados en CMake; las carpetas organizan los fuentes,
+no cambian la forma de invocar cada suite.
+
+Las fuentes unitarias se organizan por módulo en `tests/unit/config/`,
+`tests/unit/env/`, `tests/unit/console/`, `tests/unit/core/`,
+`tests/unit/diagnostics/` y `tests/unit/logging/`. Las pruebas entre procesos
+permanecen en `tests/integration/`.
+
+`kotavel.console.logging` verifica el adaptador Config → LogOptions: defaults,
+canales single/stderr/null, tipos y límites inválidos, rutas relativas/absolutas,
+ausencia de archivos con stderr/null y conservación de errores con logging apagado.

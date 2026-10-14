@@ -221,7 +221,7 @@ class WindowsOptimizationTests(unittest.TestCase):
                 ['cmake', '--build', '--preset', 'conan-debug'],
                 ['ctest', '--preset', 'conan-debug', '--output-on-failure'],
             ])
-            self.assertEqual(commands[4:], [] if fail_tests else [[str(executable)]])
+            self.assertEqual(commands[4:], [] if fail_tests else [[str(executable), '--env=production', '--project-root=' + str(executable.parent.parent.parent)]])
 
 
 @unittest.skipIf(os.name == 'nt', 'Requires a POSIX shell')
@@ -357,7 +357,7 @@ class LinuxOptimizationTests(unittest.TestCase):
                 ['cmake', '--build', '--preset', 'conan-debug'],
                 ['ctest', '--preset', 'conan-debug', '--output-on-failure'],
             ])
-            self.assertEqual(commands[4:], [] if fail_tests else [[str(executable)]])
+            self.assertEqual(commands[4:], [] if fail_tests else [[str(executable), '--env=production', '--project-root=' + str(executable.parent.parent.parent)]])
 
 
 @unittest.skipIf(os.name == 'nt', 'Requires POSIX executables')
@@ -454,7 +454,7 @@ class MacOptimizationTests(unittest.TestCase):
                     ['cmake', '--build', '--preset', 'conan-release'],
                     ['ctest', '--preset', 'conan-release', '--output-on-failure'],
                 ])
-                self.assertEqual(commands[4:], [] if fail_tests else [[str(executable)]])
+                self.assertEqual(commands[4:], [] if fail_tests else [[str(executable), '--env=production', '--project-root=' + str(executable.parent.parent.parent)]])
                 content = profile.read_text()
                 for setting in ('arch=armv8', 'compiler=apple-clang', 'compiler.libcxx=libc++', 'compiler.cppstd=23', 'build_type=Release'):
                     self.assertIn(setting, content)

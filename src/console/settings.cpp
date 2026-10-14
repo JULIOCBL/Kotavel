@@ -1,0 +1,47 @@
+#include <kotavel/console/runtime.hpp>
+#include <array>
+
+namespace kotavel {
+namespace {
+template<class T> T read(const Config& config, std::string_view key, T fallback) {
+    // Valores presentes de otro tipo se rechazan; el default solo cubre ausencia.
+    const auto* value = config.find(key);
+    if (!value) return fallback;
+    if (const auto* typed = std::get_if<T>(value)) return *typed;
+    throw std::invalid_argument("Configuration type mismatch for key: " + std::string(key));
+}
+LogLevel level(std::string_view name) {
+    constexpr std::array names{"trace", "debug", "info", "notice", "warning",
+                               "error", "critical", "alert", "emergency"};
+    for (std::size_t i = 0; i < names.size(); ++i)
+        if (name == names[i]) return static_cast<LogLevel>(i);
+    throw std::invalid_argument("Invalid configuration value for logging.level");
+}
+}
+ConsoleSettings console_settings(const ConsoleContext& context) {
+    const Config empty;
+    const auto& config = context.configuration ? *context.configuration : empty;
+    ConsoleSettings result;
+    auto& logs = result.logs;
+    const auto channel = read(config, "logging.channel", std::string("single"));
+    if (channel != "single" && channel != "stderr" && channel != "null")
+        throw std::invalid_argument("Invalid configuration value for logging.channel");
+    // Cada canal determina sus destinos; null conserva el manejo de errores.
+    logs.enabled = channel != "null";
+    logs.file = channel == "single";
+    logs.console = channel == "stderr";
+    logs.min_level = level(read(config, "logging.level", std::string("info")));
+    logs.module = read(config, "logging.module", std::string("app"));
+    const auto directory = read(config, "logging.directory", std::string("storage/logs"));
+    if (directory.empty()) throw std::invalid_argument("Invalid configuration value for logging.directory");
+    // Una ruta relativa pertenece al consumidor; una absoluta se respeta.
+    logs.directory = context.root / std::filesystem::path(directory);
+    const auto max_bytes = read(config, "logging.max_bytes", 512 * 1024 * 1024);
+    const auto backups = read(config, "logging.backups", 3);
+    if (max_bytes < 16384 || backups < 0 || backups > 100)
+        throw std::invalid_argument("Invalid logging.max_bytes or logging.backups configuration");
+    logs.max_bytes = static_cast<std::size_t>(max_bytes);
+    logs.backups = static_cast<unsigned>(backups);
+    return result;
+}
+}

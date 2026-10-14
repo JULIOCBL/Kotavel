@@ -6,7 +6,9 @@ Framework C++23 en desarrollo. `Kotavel::Core` es una biblioteca estática con
 ciclo de vida síncrono, recuperación explícita de operaciones y diagnóstico
 a archivo y consola, con ubicación, trazas y presentación por entorno. No tiene dependencias externas ni servidor.
 
-Consulta [el uso del núcleo](docs/core.md) para configurar registros y errores.
+Consulta [el uso del núcleo](docs/core.md) para configurar registros y errores,
+y la [documentación técnica de Config](docs/configuration.md) para entender su
+almacenamiento, carga, coste de operaciones y reglas de concurrencia.
 
 El [blueprint propuesto de Kotavel](docs/blueprint/README.md) define la estructura,
 las etapas de implementación y los criterios de rendimiento del framework. Los [microbenchmarks](benchmarks/README.md)

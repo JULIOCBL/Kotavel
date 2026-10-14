@@ -33,6 +33,9 @@ class CommandHelpParser(argparse.ArgumentParser):
         lines.extend(['', paint('Variantes:', '1;36')])
         for command, description in [
             ('install add nombre/version', 'Añade una dependencia sin duplicarla.'),
+            ('run --env=local', 'Carga .env.local y ejecuta la aplicación.'),
+            ('run --env=development', 'Carga .env.development y ejecuta.'),
+            ('run --env=production', 'Carga .env (opción predeterminada).'),
             ('install --offline', 'Usa solo la caché local.'),
             ('test --framework', 'Comprueba Python, núcleo e integración local.'),
         ]:
