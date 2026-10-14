@@ -381,8 +381,9 @@ y finalizar correctamente según la política del consumidor.
 
 ## Configuración en memoria con `Config`
 
-Para el funcionamiento interno, costes y garantías de la implementación,
-consulta la [documentación técnica de Config](configuration.md).
+Para el uso del entorno y de `Config`, consulta [Configuración](configuration.md).
+Para el funcionamiento interno, costes y garantías de la implementación, consulta
+la [referencia interna de Config](internals/config.md).
 
 ```cpp
 #include <kotavel/config/config.hpp>
