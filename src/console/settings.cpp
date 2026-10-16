@@ -43,15 +43,15 @@ ConsoleSettings console_settings(const ConsoleContext& context) {
     logs.max_bytes = static_cast<std::size_t>(max_bytes);
     logs.backups = static_cast<unsigned>(backups);
 
-    auto& performance = result.performance;
-    performance.enabled = read(config, "performance.enabled", false);
-    performance.console = read(config, "performance.console", true);
-    performance.startup = read(config, "performance.startup", true);
-    performance.stream = read(config, "performance.stream", false);
-    const auto interval_ms = read(config, "performance.interval_ms", 1000);
+    auto& metrics = result.metrics;
+    metrics.enabled = read(config, "metrics.enabled", false);
+    metrics.console = read(config, "metrics.console", true);
+    metrics.startup = read(config, "metrics.startup", true);
+    metrics.stream = read(config, "metrics.stream", false);
+    const auto interval_ms = read(config, "metrics.interval_ms", 1000);
     if (interval_ms < 100 || interval_ms > 60000)
-        throw std::invalid_argument("Invalid performance.interval_ms configuration");
-    performance.interval = std::chrono::milliseconds(interval_ms);
+        throw std::invalid_argument("Invalid metrics.interval_ms configuration");
+    metrics.interval = std::chrono::milliseconds(interval_ms);
     return result;
 }
 }

@@ -479,7 +479,7 @@ kotavel::ConfigMap load() {
 Consulta [Logger configurado desde Config](core.md#logger-configurado-desde-config)
 para el detalle de cada canal.
 
-Las opciones del grupo `performance` y sus límites están en la
+Las opciones del grupo `metrics` y sus límites están en la
 [documentación de métricas](metrics.md).
 
 <a name="limites"></a>

@@ -1,4 +1,4 @@
-#include <kotavel/metrics/performance.hpp>
+#include <kotavel/metrics/metrics.hpp>
 #include "process_metrics_internal.hpp"
 
 #include <sys/resource.h>

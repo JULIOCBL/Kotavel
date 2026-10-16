@@ -1,4 +1,4 @@
-# Métricas de rendimiento
+# Métricas
 
 - [Introducción](#introduccion)
 - [Ver las métricas desde el Laboratorio](#ver-las-metricas-desde-el-laboratorio)
@@ -15,7 +15,7 @@
 <a name="introduccion"></a>
 ## Introducción
 
-El módulo `kotavel/metrics/performance.hpp` mide el uso de CPU y memoria
+El módulo `kotavel/metrics/metrics.hpp` mide el uso de CPU y memoria
 residente del proceso actual, y ofrece un monitor que toma muestras periódicas.
 También permite consultar las etapas del arranque de consola. El consumidor elige
 dónde presentar o enviar esos datos; el núcleo no los guarda en los logs de errores.
@@ -23,9 +23,9 @@ dónde presentar o enviar esos datos; el núcleo no los guarda en los logs de er
 Hay dos formas de usarlo:
 
 1. **Integración con `run_console`:** el consumidor configura el grupo
-   `performance`; el runtime administra el monitor y su cierre.
+   `metrics`; el runtime administra el monitor y su cierre.
 2. **Uso directo:** el consumidor crea un `ProcessMetricsCollector` o un
-   `PerformanceMonitor` y define un callback propio.
+   `MetricsMonitor` y define un callback propio.
 
 La integración del Laboratorio también publica las muestras para que el comando
 `python3 kotavel.py monitor` las muestre en otra terminal. Consulta
@@ -73,24 +73,24 @@ El PID aparece en el nombre del descriptor ubicado en
 <a name="configurar-el-modulo"></a>
 ## Configurar el módulo
 
-El consumidor registra sus opciones en el mapa compilado `config/performance.cpp`.
+El consumidor registra sus opciones en el mapa compilado `config/metrics.cpp`.
 Como en los demás archivos `config/*.cpp`, puede usar `env()` para obtener valores
 del archivo de entorno o del proceso:
 
 ```cpp
-// config/performance.cpp
-#include "performance.hpp"
+// config/metrics.cpp
+#include "metrics.hpp"
 #include <kotavel/env/env.hpp>
 
-namespace app::config::performance {
+namespace app::config::metrics {
 kotavel::ConfigMap load() {
     using kotavel::env;
     return {
-        {"enabled", env("KOTAVEL_PERFORMANCE_ENABLED", false)},
+        {"enabled", env("KOTAVEL_METRICS_ENABLED", false)},
         {"interval_ms", 1000},
-        {"console", env("KOTAVEL_PERFORMANCE_CONSOLE", true)},
+        {"console", env("KOTAVEL_METRICS_CONSOLE", true)},
         {"startup", true},
-        {"stream", env("KOTAVEL_PERFORMANCE_STREAM", false)},
+        {"stream", env("KOTAVEL_METRICS_STREAM", false)},
     };
 }
 }
@@ -101,7 +101,7 @@ El registro explícito debe incluir ese archivo para que el runtime reciba el gr
 ```cpp
 // config/app_config_files.cpp
 const kotavel::ConfigFile files[] = {
-    {"performance", performance::load},
+    {"metrics", metrics::load},
 };
 ```
 
@@ -110,30 +110,30 @@ pueden elegir sus propios valores. Sus claves son:
 
 | Clave | Tipo | Valor del Laboratorio | Función |
 | --- | --- | --- | --- |
-| `performance.enabled` | bool | `true` | Activa la medición |
-| `performance.interval_ms` | int | `1000` | Intervalo entre muestras; de 100 a 60000 ms |
-| `performance.console` | bool | `false` | Imprime muestras en la terminal principal |
-| `performance.startup` | bool | `true` | Publica o imprime las duraciones del arranque |
-| `performance.stream` | bool | `true` | Publica muestras para el comando `monitor` |
-| `performance.hold` | bool | `true` | Opción propia del ejemplo del Laboratorio: lo mantiene activo |
+| `metrics.enabled` | bool | `true` | Activa la medición |
+| `metrics.interval_ms` | int | `1000` | Intervalo entre muestras; de 100 a 60000 ms |
+| `metrics.console` | bool | `false` | Imprime muestras en la terminal principal |
+| `metrics.startup` | bool | `true` | Publica o imprime las duraciones del arranque |
+| `metrics.stream` | bool | `true` | Publica muestras para el comando `monitor` |
+| `metrics.hold` | bool | `true` | Opción propia del ejemplo del Laboratorio: lo mantiene activo |
 
 El Laboratorio lee estas variables desde el `.env` seleccionado:
 
 ```ini
-KOTAVEL_PERFORMANCE_ENABLED=true
-KOTAVEL_PERFORMANCE_CONSOLE=false
-KOTAVEL_PERFORMANCE_STREAM=true
-KOTAVEL_PERFORMANCE_HOLD=true
+KOTAVEL_METRICS_ENABLED=true
+KOTAVEL_METRICS_CONSOLE=false
+KOTAVEL_METRICS_STREAM=true
+KOTAVEL_METRICS_HOLD=true
 ```
 
 `hold` pertenece al programa de ejemplo del Laboratorio; no es una opción del
 runtime de Kotavel. Una aplicación real permanece activa según su servidor,
 worker o ciclo principal. Para desactivar las métricas del Laboratorio, define
-`KOTAVEL_PERFORMANCE_ENABLED=false`.
+`KOTAVEL_METRICS_ENABLED=false`.
 
 El runtime estándar usa estos valores cuando el grupo no declara una opción:
 
-| Opción de `PerformanceOptions` | Predeterminado |
+| Opción de `MetricsOptions` | Predeterminado |
 | --- | --- |
 | `enabled` | `false` |
 | `interval` | `1000 ms` |
@@ -151,7 +151,7 @@ configuración durante el arranque.
 Incluye la cabecera pública:
 
 ```cpp
-#include <kotavel/metrics/performance.hpp>
+#include <kotavel/metrics/metrics.hpp>
 ```
 
 `ProcessMetricsCollector` consulta una muestra del mismo proceso que lo ejecuta.
@@ -162,16 +162,16 @@ una instancia debe usarse desde un solo hilo.
 ### Tomar muestras
 
 Puedes consultar muestras manualmente o delegar las consultas a
-`PerformanceMonitor`:
+`MetricsMonitor`:
 
 ```cpp
-#include <kotavel/metrics/performance.hpp>
+#include <kotavel/metrics/metrics.hpp>
 #include <chrono>
 #include <iostream>
 #include <thread>
 
-kotavel::metrics::PerformanceMonitor monitor;
-monitor.start(std::chrono::seconds(1), [](const kotavel::metrics::PerformanceSample& sample) {
+kotavel::metrics::MetricsMonitor monitor;
+monitor.start(std::chrono::seconds(1), [](const kotavel::metrics::MetricsSample& sample) {
     if (sample.process_cpu_percent)
         std::cout << "CPU: " << *sample.process_cpu_percent << " %\n";
     std::cout << "RAM residente: " << sample.resident_memory_bytes << " bytes\n";
@@ -230,11 +230,11 @@ ejecutable ni inicializadores estáticos.
 <a name="enviar-metricas-a-otra-terminal"></a>
 ## Enviar métricas a otra terminal
 
-Para implementar otro consumidor local, `PerformanceStream` publica el último
+Para implementar otro consumidor local, `MetricsStream` publica el último
 arranque y la última muestra:
 
 ```cpp
-kotavel::metrics::PerformanceStream stream;
+kotavel::metrics::MetricsStream stream;
 stream.start(project_root);
 stream.publish_startup(startup_metrics);
 stream.publish(sample);
@@ -248,7 +248,7 @@ al cerrar normalmente. Los eventos se transmiten como líneas JSON; si un client
 se conecta tarde, recibe la última muestra disponible. El transporte no admite
 conexiones desde otras máquinas y atiende un monitor a la vez; si otro cliente se
 conecta, reemplaza la conexión anterior. El runtime inicia este canal solo cuando
-la opción `performance.stream` está activa y lo cierra antes de apagar `Application`.
+la opción `metrics.stream` está activa y lo cierra antes de apagar `Application`.
 
 <a name="ciclo-de-vida-y-concurrencia"></a>
 ## Ciclo de vida y concurrencia
@@ -286,7 +286,7 @@ python3 kotavel.py test --framework
 ```
 
 La suite unitaria de métricas comprueba muestras, intervalos, callbacks,
-inicio/parada y reinicio del monitor. La integración de `PerformanceStream`
+inicio/parada y reinicio del monitor. La integración de `MetricsStream`
 conecta un cliente real al listener local. La integración del Laboratorio ejecuta
 `kotavel.py monitor` como segundo proceso, confirma que las métricas no aparecen
 en la terminal principal y verifica el cierre ordenado.
@@ -305,4 +305,4 @@ módulo es una herramienta de observación, no un profiler que localice qué fun
 consume recursos.
 
 La API pública completa está en
-[`include/kotavel/metrics/performance.hpp`](../include/kotavel/metrics/performance.hpp).
+[`include/kotavel/metrics/metrics.hpp`](../include/kotavel/metrics/metrics.hpp).

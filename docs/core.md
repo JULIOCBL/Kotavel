@@ -339,7 +339,7 @@ No implementa registro automático de comandos, executor ni tareas asíncronas.
 
 ### Métricas del proceso
 
-El módulo `<kotavel/metrics/performance.hpp>` expone mediciones del proceso y un
+El módulo `<kotavel/metrics/metrics.hpp>` expone mediciones del proceso y un
 monitor periódico. Consulta la [documentación de métricas](metrics.md) para
 las opciones, el ciclo de vida, las unidades y los límites de medición.
 
@@ -375,8 +375,8 @@ para que el consumidor siga usando los mismos includes y helpers.
 | | `settings.cpp` | Validación y construcción del logger desde Config |
 | | `arguments.cpp` | Interpretación de opciones comunes |
 | | `operation.cpp` | Ejecución y presentación de una operación |
-| `src/metrics/` | `performance.cpp` | Cálculo de CPU, monitor y callback periódico |
-| | `performance_stream.cpp` | Publicación local de muestras para clientes del proceso |
+| `src/metrics/` | `metrics.cpp` | Cálculo de CPU, monitor y callback periódico |
+| | `metrics_stream.cpp` | Publicación local de muestras para clientes del proceso |
 | | `process_metrics_posix.cpp` | Lectura de proceso en macOS y Linux |
 | | `process_metrics_windows.cpp` | Lectura de proceso en Windows |
 

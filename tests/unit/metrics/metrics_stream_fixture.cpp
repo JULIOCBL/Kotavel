@@ -1,4 +1,4 @@
-#include <kotavel/metrics/performance.hpp>
+#include <kotavel/metrics/metrics.hpp>
 
 #include <chrono>
 #include <filesystem>
@@ -8,7 +8,7 @@
 int main(int argc, char** argv) {
     if (argc != 2) return 2;
     try {
-        kotavel::metrics::PerformanceStream stream;
+        kotavel::metrics::MetricsStream stream;
         stream.start(std::filesystem::path(argv[1]));
         stream.publish_startup({std::chrono::milliseconds(1), std::chrono::milliseconds(2),
                                 std::chrono::milliseconds(3), std::chrono::milliseconds(4),

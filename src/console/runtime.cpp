@@ -69,9 +69,9 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
             Clock::now() - run_started);
 
         // El stream local permite observar métricas desde otra terminal.
-        std::optional<metrics::PerformanceStream> stream;
-        bool print_metrics_to_console = settings.performance.console;
-        if (settings.performance.enabled && settings.performance.stream) {
+        std::optional<metrics::MetricsStream> stream;
+        bool print_metrics_to_console = settings.metrics.console;
+        if (settings.metrics.enabled && settings.metrics.stream) {
             try {
                 stream.emplace();
                 stream->start(context.root);
@@ -85,8 +85,8 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
         }
 
         // El monitor arranca cuando Application está lista y se detiene antes del cierre.
-        metrics::PerformanceMonitor monitor;
-        if (settings.performance.enabled && settings.performance.startup) {
+        metrics::MetricsMonitor monitor;
+        if (settings.metrics.enabled && settings.metrics.startup) {
             if (stream && stream->running()) stream->publish_startup(startup);
             if (print_metrics_to_console) {
                 const auto milliseconds = [](std::chrono::nanoseconds value) {
@@ -103,8 +103,8 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
                 std::cout << output.str() << std::flush;
             }
         }
-        if (settings.performance.enabled && (print_metrics_to_console || (stream && stream->running()))) {
-            const auto publish_sample = [&](const metrics::PerformanceSample& sample) {
+        if (settings.metrics.enabled && (print_metrics_to_console || (stream && stream->running()))) {
+            const auto publish_sample = [&](const metrics::MetricsSample& sample) {
                 if (stream && stream->running()) stream->publish(sample);
                 if (!print_metrics_to_console) return;
                 std::lock_guard output_lock(metrics_output_mutex);
@@ -122,7 +122,7 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
             // Mostrar la RAM inicial aunque el monitor se conecte después.
             metrics::ProcessMetricsCollector initial_collector;
             if (const auto initial = initial_collector.sample()) publish_sample(*initial);
-            monitor.start(settings.performance.interval, publish_sample, std::move(initial_collector));
+            monitor.start(settings.metrics.interval, publish_sample, std::move(initial_collector));
         }
         const auto code = execute(application, context);
         // No convertir un fallo fatal ignorado por el consumidor en una salida exitosa.

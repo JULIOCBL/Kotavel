@@ -1,4 +1,4 @@
-#include <kotavel/metrics/performance.hpp>
+#include <kotavel/metrics/metrics.hpp>
 #include "process_metrics_internal.hpp"
 
 #include <stdexcept>
@@ -6,14 +6,14 @@
 
 namespace kotavel::metrics {
 
-std::optional<PerformanceSample> ProcessMetricsCollector::sample() noexcept {
+std::optional<MetricsSample> ProcessMetricsCollector::sample() noexcept {
     std::optional<detail::ProcessSnapshot> current;
     try { current = detail::read_process_snapshot(); }
     catch (...) { return std::nullopt; }
     if (!current) return std::nullopt;
 
     const auto now = std::chrono::steady_clock::now();
-    PerformanceSample result{now, std::nullopt, current->resident_memory_bytes};
+    MetricsSample result{now, std::nullopt, current->resident_memory_bytes};
     if (previous_cpu_time_ && previous_wall_time_) {
         const auto wall_delta = now - *previous_wall_time_;
         const auto cpu_delta = current->process_cpu_time - *previous_cpu_time_;
@@ -29,22 +29,22 @@ std::optional<PerformanceSample> ProcessMetricsCollector::sample() noexcept {
     return result;
 }
 
-PerformanceMonitor::~PerformanceMonitor() { stop(); }
+MetricsMonitor::~MetricsMonitor() { stop(); }
 
-void PerformanceMonitor::start(std::chrono::milliseconds interval,
-                               PerformanceCallback callback) {
+void MetricsMonitor::start(std::chrono::milliseconds interval,
+                               MetricsCallback callback) {
     start(interval, std::move(callback), ProcessMetricsCollector{});
 }
 
-void PerformanceMonitor::start(std::chrono::milliseconds interval,
-                               PerformanceCallback callback,
+void MetricsMonitor::start(std::chrono::milliseconds interval,
+                               MetricsCallback callback,
                                ProcessMetricsCollector collector) {
     if (interval < std::chrono::milliseconds(100) || interval > std::chrono::minutes(1))
-        throw std::invalid_argument("Performance sampling interval must be between 100 ms and 60 s");
-    if (!callback) throw std::invalid_argument("Performance monitor requires a callback");
+        throw std::invalid_argument("Metrics sampling interval must be between 100 ms and 60 s");
+    if (!callback) throw std::invalid_argument("Metrics monitor requires a callback");
 
     std::lock_guard lock(state_mutex_);
-    if (worker_.joinable()) throw std::logic_error("Performance monitor is already running");
+    if (worker_.joinable()) throw std::logic_error("Metrics monitor is already running");
     stopping_.store(false, std::memory_order_release);
     worker_ = std::thread([this, interval, callback = std::move(callback),
                            collector = std::move(collector)]() mutable {
@@ -52,7 +52,7 @@ void PerformanceMonitor::start(std::chrono::milliseconds interval,
     });
 }
 
-void PerformanceMonitor::stop() noexcept {
+void MetricsMonitor::stop() noexcept {
     {
         std::lock_guard lock(state_mutex_);
         if (!worker_.joinable()) return;
@@ -64,13 +64,13 @@ void PerformanceMonitor::stop() noexcept {
     worker_.join();
 }
 
-bool PerformanceMonitor::running() const noexcept {
+bool MetricsMonitor::running() const noexcept {
     std::lock_guard lock(state_mutex_);
     return worker_.joinable() && !stopping_.load(std::memory_order_acquire);
 }
 
-void PerformanceMonitor::run(std::chrono::milliseconds interval,
-                             PerformanceCallback callback,
+void MetricsMonitor::run(std::chrono::milliseconds interval,
+                             MetricsCallback callback,
                              ProcessMetricsCollector collector) noexcept {
     try {
         std::unique_lock wait_lock(wait_mutex_);

@@ -1,4 +1,4 @@
-#include <kotavel/metrics/performance.hpp>
+#include <kotavel/metrics/metrics.hpp>
 
 #include <atomic>
 #include <cmath>
@@ -88,7 +88,7 @@ void set_send_timeout(Socket socket) noexcept {
 }
 }
 
-struct PerformanceStream::Impl {
+struct MetricsStream::Impl {
     std::filesystem::path endpoint;
     Socket listener = invalid_socket;
     std::thread worker;
@@ -175,13 +175,13 @@ struct PerformanceStream::Impl {
     }
 };
 
-PerformanceStream::PerformanceStream() : impl_(std::make_unique<Impl>()) {}
+MetricsStream::MetricsStream() : impl_(std::make_unique<Impl>()) {}
 
-PerformanceStream::~PerformanceStream() { stop(); }
+MetricsStream::~MetricsStream() { stop(); }
 
-void PerformanceStream::start(const std::filesystem::path& project_root) {
+void MetricsStream::start(const std::filesystem::path& project_root) {
     if (impl_->active.load(std::memory_order_acquire) || impl_->worker.joinable())
-        throw std::logic_error("Performance stream is already running");
+        throw std::logic_error("Metrics stream is already running");
 
     const auto directory = project_root / "storage" / "framework" / "metrics";
     std::filesystem::create_directories(directory);
@@ -247,7 +247,7 @@ void PerformanceStream::start(const std::filesystem::path& project_root) {
     impl_->active.store(true, std::memory_order_release);
 }
 
-void PerformanceStream::publish(const PerformanceSample& sample) noexcept {
+void MetricsStream::publish(const MetricsSample& sample) noexcept {
     try {
         std::ostringstream message;
         message.imbue(std::locale::classic());
@@ -266,7 +266,7 @@ void PerformanceStream::publish(const PerformanceSample& sample) noexcept {
     }
 }
 
-void PerformanceStream::publish_startup(const StartupMetrics& metrics) noexcept {
+void MetricsStream::publish_startup(const StartupMetrics& metrics) noexcept {
     try {
         const auto milliseconds = [](std::chrono::nanoseconds value) {
             return std::chrono::duration<double, std::milli>(value).count();
@@ -286,7 +286,7 @@ void PerformanceStream::publish_startup(const StartupMetrics& metrics) noexcept 
     }
 }
 
-void PerformanceStream::stop() noexcept {
+void MetricsStream::stop() noexcept {
     if (!impl_) return;
     impl_->stopping.store(true, std::memory_order_release);
     if (impl_->worker.joinable()) impl_->worker.join();
@@ -306,7 +306,7 @@ void PerformanceStream::stop() noexcept {
     impl_->active.store(false, std::memory_order_release);
 }
 
-bool PerformanceStream::running() const noexcept {
+bool MetricsStream::running() const noexcept {
     return impl_ && impl_->active.load(std::memory_order_acquire);
 }
 

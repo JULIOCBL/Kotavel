@@ -20,8 +20,8 @@ add_library(kotavel_core STATIC
     src/console/arguments.cpp
     src/console/operation.cpp
     # Métricas de proceso: API propia con adaptador del sistema operativo.
-    src/metrics/performance.cpp
-    src/metrics/performance_stream.cpp
+    src/metrics/metrics.cpp
+    src/metrics/metrics_stream.cpp
     src/foundation/application.cpp
     src/foundation/application_errors.cpp
     src/diagnostics/logger.cpp
@@ -89,13 +89,13 @@ if(KOTAVEL_BUILD_TESTS)
     add_test(NAME kotavel.console.logging COMMAND kotavel_logging_settings_tests)
     set_tests_properties(kotavel.console.logging PROPERTIES ENVIRONMENT "APP_ENV=production;APP_DEBUG=false;LOG_CHANNEL=\"null\"")
     set_tests_properties(kotavel.console PROPERTIES ENVIRONMENT "APP_ENV=production;APP_DEBUG=false")
-    add_executable(kotavel_metrics_tests tests/unit/metrics/performance_tests.cpp)
+    add_executable(kotavel_metrics_tests tests/unit/metrics/metrics_tests.cpp)
     target_link_libraries(kotavel_metrics_tests PRIVATE Kotavel::Core)
     add_test(NAME kotavel.metrics COMMAND kotavel_metrics_tests)
-    add_executable(kotavel_metrics_stream_fixture tests/unit/metrics/performance_stream_fixture.cpp)
+    add_executable(kotavel_metrics_stream_fixture tests/unit/metrics/metrics_stream_fixture.cpp)
     target_link_libraries(kotavel_metrics_stream_fixture PRIVATE Kotavel::Core)
     add_test(NAME kotavel.metrics.stream COMMAND ${Python3_EXECUTABLE}
-        ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/performance_stream.py
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/metrics_stream.py
         $<TARGET_FILE:kotavel_metrics_stream_fixture>)
     set_tests_properties(kotavel.metrics.stream PROPERTIES TIMEOUT 10)
     add_executable(kotavel_env_tests tests/unit/env/env_tests.cpp)

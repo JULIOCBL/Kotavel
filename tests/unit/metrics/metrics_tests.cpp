@@ -1,4 +1,4 @@
-#include <kotavel/metrics/performance.hpp>
+#include <kotavel/metrics/metrics.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -12,7 +12,7 @@
 
 namespace {
 using namespace std::chrono_literals;
-using kotavel::metrics::PerformanceMonitor;
+using kotavel::metrics::MetricsMonitor;
 using kotavel::metrics::ProcessMetricsCollector;
 
 void check(bool condition, const char* message) {
@@ -48,7 +48,7 @@ void check_process_sample_contract() {
 }
 
 void check_monitor_validation() {
-    PerformanceMonitor monitor;
+    MetricsMonitor monitor;
     const auto noop = [](const auto&) {};
     expect_exception<std::invalid_argument>(
         [&] { monitor.start(99ms, noop); }, "Monitor accepted an interval below 100 ms");
@@ -76,7 +76,7 @@ void check_monitor_callback_and_shutdown() {
     ProcessMetricsCollector collector;
     check(collector.sample().has_value(), "Could not seed the monitor collector");
 
-    PerformanceMonitor monitor;
+    MetricsMonitor monitor;
     monitor.start(100ms, [&](const auto& sample) {
         if (sample.resident_memory_bytes == 0 || !sample.process_cpu_percent ||
             !std::isfinite(*sample.process_cpu_percent) || *sample.process_cpu_percent < 0.0)
@@ -132,7 +132,7 @@ void check_stop_from_callback() {
     std::mutex mutex;
     std::condition_variable ready;
     bool callback_returned = false;
-    PerformanceMonitor monitor;
+    MetricsMonitor monitor;
     monitor.start(100ms, [&](const auto&) {
         // Self-stop requests cancellation; the owner thread performs the join later.
         monitor.stop();
@@ -159,7 +159,7 @@ int main() {
         check_monitor_validation();
         check_monitor_callback_and_shutdown();
         check_stop_from_callback();
-        std::cout << "Performance metrics tests passed\n";
+        std::cout << "Metrics tests passed\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
