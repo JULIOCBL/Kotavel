@@ -42,6 +42,16 @@ ConsoleSettings console_settings(const ConsoleContext& context) {
         throw std::invalid_argument("Invalid logging.max_bytes or logging.backups configuration");
     logs.max_bytes = static_cast<std::size_t>(max_bytes);
     logs.backups = static_cast<unsigned>(backups);
+
+    auto& performance = result.performance;
+    performance.enabled = read(config, "performance.enabled", false);
+    performance.console = read(config, "performance.console", true);
+    performance.startup = read(config, "performance.startup", true);
+    performance.stream = read(config, "performance.stream", false);
+    const auto interval_ms = read(config, "performance.interval_ms", 1000);
+    if (interval_ms < 100 || interval_ms > 60000)
+        throw std::invalid_argument("Invalid performance.interval_ms configuration");
+    performance.interval = std::chrono::milliseconds(interval_ms);
     return result;
 }
 }

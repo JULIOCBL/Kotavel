@@ -28,6 +28,27 @@ int main() {
         check(settings.logs.file && settings.logs.enabled && !settings.logs.console);
         check(settings.logs.directory == root / "storage/logs");
         check(settings.logs.max_bytes == 512 * 1024 * 1024 && settings.logs.backups == 3);
+        check(!settings.performance.enabled && settings.performance.console && settings.performance.startup);
+        check(!settings.performance.stream);
+        check(settings.performance.interval == std::chrono::milliseconds(1000));
+        config.set("performance.enabled", true);
+        config.set("performance.console", false);
+        config.set("performance.stream", true);
+        config.set("performance.interval_ms", 250);
+        settings = kotavel::console_settings(context);
+        check(settings.performance.enabled && !settings.performance.console && settings.performance.stream &&
+              settings.performance.interval == std::chrono::milliseconds(250));
+        config.set("performance.interval_ms", 99);
+        invalid([&] { (void)kotavel::console_settings(context); });
+        config.set("performance.interval_ms", 60001);
+        invalid([&] { (void)kotavel::console_settings(context); });
+        config.set("performance.interval_ms", 60000);
+        settings = kotavel::console_settings(context);
+        check(settings.performance.interval == std::chrono::milliseconds(60000));
+        config.set("performance.enabled", 1);
+        invalid([&] { (void)kotavel::console_settings(context); });
+        config.set("performance.enabled", true);
+        config.set("performance.interval_ms", 1000);
         {
             auto file_options = settings.logs;
             file_options.directory = root / "single/logs";

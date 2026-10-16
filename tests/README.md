@@ -87,10 +87,18 @@ CTest usa los nombres registrados en CMake; las carpetas organizan los fuentes,
 no cambian la forma de invocar cada suite.
 
 Las fuentes unitarias se organizan por módulo en `tests/unit/config/`,
-`tests/unit/env/`, `tests/unit/console/`, `tests/unit/core/`,
+`tests/unit/env/`, `tests/unit/console/`, `tests/unit/metrics/`, `tests/unit/core/`,
 `tests/unit/diagnostics/` y `tests/unit/logging/`. Las pruebas entre procesos
 permanecen en `tests/integration/`.
 
 `kotavel.console.logging` verifica el adaptador Config → LogOptions: defaults,
 canales single/stderr/null, tipos y límites inválidos, rutas relativas/absolutas,
 ausencia de archivos con stderr/null y conservación de errores con logging apagado.
+`kotavel.metrics` comprueba muestras reales sin fijar valores del sistema operativo,
+cálculo de CPU entre lecturas, límites del intervalo, rechazo de callbacks inválidos,
+continuidad tras una excepción, rechazo de un segundo arranque, parada idempotente,
+reinicio y parada solicitada desde el callback. Verifica también que no se invoque
+el callback después de que `stop()` regrese. La matriz nativa de CI compila y ejecuta
+estas mismas pruebas en Linux, macOS y Windows.
+`kotavel.metrics.stream` conecta un cliente local real y comprueba los eventos de
+arranque y muestra, el enlace a loopback y la eliminación del descriptor al cerrar.

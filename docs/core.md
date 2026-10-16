@@ -337,6 +337,12 @@ logger. El consumidor decide qué resultados recuperables permiten continuar.
 Los fallos externos retornan 1; los detalles solo se imprimen en modo debug.
 No implementa registro automático de comandos, executor ni tareas asíncronas.
 
+### Métricas del proceso
+
+El módulo `<kotavel/metrics/performance.hpp>` expone mediciones del proceso y un
+monitor periódico. Consulta la [documentación de métricas](metrics.md) para
+las opciones, el ciclo de vida, las unidades y los límites de medición.
+
 Si el archivo no declara APP_ENV, FileEnvironment publica la selección validada.
 Para imprimirlo sin valor predeterminado: `std::cout << env("APP_ENV")`.
 Los booleanos imprimen true/false y la ausencia/null imprime null.
@@ -369,6 +375,10 @@ para que el consumidor siga usando los mismos includes y helpers.
 | | `settings.cpp` | Validación y construcción del logger desde Config |
 | | `arguments.cpp` | Interpretación de opciones comunes |
 | | `operation.cpp` | Ejecución y presentación de una operación |
+| `src/metrics/` | `performance.cpp` | Cálculo de CPU, monitor y callback periódico |
+| | `performance_stream.cpp` | Publicación local de muestras para clientes del proceso |
+| | `process_metrics_posix.cpp` | Lectura de proceso en macOS y Linux |
+| | `process_metrics_windows.cpp` | Lectura de proceso en Windows |
 
 Las cabeceras privadas comparten únicamente contratos internos y utilidades
 pequeñas; no se instalan ni deben incluirse desde el consumidor. Cada `.cpp`

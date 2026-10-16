@@ -27,6 +27,7 @@ class CommandHelpParser(argparse.ArgumentParser):
             ('build', 'Instala dependencias, compila y prueba.'),
             ('test', 'Ejecuta las pruebas sin recompilar.'),
             ('run', 'Compila, prueba y ejecuta la aplicación.'),
+            ('monitor', 'Muestra métricas de una aplicación en ejecución.'),
             ('shell', 'Abre la terminal con las herramientas activas.'),
         ]:
             lines.append(row(command, description))
@@ -38,6 +39,7 @@ class CommandHelpParser(argparse.ArgumentParser):
             ('run --env=production', 'Carga .env (opción predeterminada).'),
             ('install --offline', 'Usa solo la caché local.'),
             ('test --framework', 'Comprueba Python, núcleo e integración local.'),
+            ('monitor --pid PID', 'Selecciona una instancia concreta.'),
         ]:
             lines.append(row(command, description))
         lines.extend(['', paint('Opciones:', '1;36')])
@@ -66,6 +68,7 @@ def main(argv=None):
         'build': 'Instala dependencias, compila el proyecto y ejecuta sus pruebas.',
         'test': 'Ejecuta las pruebas del proyecto; --framework comprueba Python, núcleo e integración local.',
         'run': 'Compila, prueba y ejecuta la aplicación.',
+        'monitor': 'Muestra CPU y RAM de una aplicación Kotavel activa.',
         'shell': 'Abre una terminal con las herramientas del proyecto activas.',
     }
     for name, description in descriptions.items():
@@ -74,6 +77,9 @@ def main(argv=None):
     args, remaining = parser.parse_known_args(argv)
     root = args.project.resolve()
     try:
+        if args.command == 'monitor':
+            from . import monitor
+            return monitor.main([*remaining, '--project', str(root)])
         if args.command == 'install':
             from . import deps
             deps.main([*remaining, '--project', str(root)])

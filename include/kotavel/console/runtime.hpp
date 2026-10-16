@@ -2,6 +2,7 @@
 #include <kotavel/foundation/application.hpp>
 #include <kotavel/env/env.hpp>
 #include <kotavel/config/config_helpers.hpp>
+#include <kotavel/metrics/performance.hpp>
 #include <span>
 #include <vector>
 
@@ -15,6 +16,7 @@ struct ConsoleContext {
 struct ConsoleSettings {
     LogOptions logs;
     ErrorHandlingOptions errors;
+    metrics::PerformanceOptions performance;
 };
 using ConfigureConsole = std::function<ConsoleSettings(const ConsoleContext&)>;
 using ExecuteConsole = std::function<int(Application&, const ConsoleContext&)>;

@@ -1,4 +1,6 @@
 import importlib.util
+from contextlib import redirect_stdout
+import io
 import json
 from pathlib import Path
 import sys
@@ -8,7 +10,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
-from kotavel_cli import cli, deps, install
+from kotavel_cli import cli, deps, install, monitor
 
 
 class ConsumerToolsTests(unittest.TestCase):
@@ -37,6 +39,27 @@ class ConsumerToolsTests(unittest.TestCase):
         with patch.object(install, 'main') as command:
             self.assertEqual(cli.main(['--project', str(self.root), 'test', '--framework']), 0)
         command.assert_called_once_with(['--test', '--framework', '--project', str(self.root.resolve())])
+
+    def test_monitor_command_dispatches_with_selected_project(self):
+        with patch.object(monitor, 'main', return_value=0) as command:
+            self.assertEqual(cli.main(['--project', str(self.root), 'monitor', '--pid', '123']), 0)
+        command.assert_called_once_with(['--pid', '123', '--project', str(self.root.resolve())])
+
+    def test_monitor_formats_startup_and_sample_events(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            monitor._show({
+                'type': 'startup', 'environment_ms': 1.0, 'configuration_ms': 2.0,
+                'settings_ms': 3.0, 'application_boot_ms': 4.0, 'total_ms': 10.0,
+            })
+            monitor._show({'type': 'sample', 'cpu_percent': None,
+                           'resident_memory_bytes': 1024 * 1024})
+        self.assertIn('Arranque:', output.getvalue())
+        self.assertIn('CPU: calculando | RAM residente: 1.0 MiB', output.getvalue())
+
+    def test_monitor_rejects_unknown_event(self):
+        with self.assertRaisesRegex(ValueError, 'evento de métricas desconocido'):
+            monitor._show({'type': 'future-event'})
 
     def test_framework_tests_reject_package_mode_before_preparation(self):
         (self.root / 'conanfile.py').write_text('')
