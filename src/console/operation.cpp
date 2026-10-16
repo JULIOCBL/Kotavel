@@ -1,4 +1,5 @@
 #include <kotavel/console/runtime.hpp>
+#include "../text/messages.hpp"
 #include <iostream>
 
 namespace kotavel {
@@ -9,7 +10,7 @@ OperationResult execute_console(Application& application, std::string_view id,
     if (const auto presentation = application.present_error())
         std::cerr << presentation->console_text();
     if (application.last_error() && application.last_error()->report_status == ReportStatus::failed)
-        std::cerr << "Aviso: no se pudo guardar el diagnóstico.\n";
+        std::cerr << Messages::get("runtime.diagnostic_not_saved.description") << '\n';
     return result;
 }
 }

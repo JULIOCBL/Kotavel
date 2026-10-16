@@ -1,5 +1,6 @@
 #include <kotavel/console/runtime.hpp>
 #include "arguments.hpp"
+#include "settings_error.hpp"
 #include "../env/environment_internal.hpp"
 #include "../text/messages.hpp"
 #include <kotavel/system/os.hpp>
@@ -25,6 +26,11 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
     using Clock = std::chrono::steady_clock;
     const auto run_started = Clock::now();
     bool debug = false;
+    std::filesystem::path project_root;
+    std::filesystem::path log_directory;
+    std::string_view phase = "parse_arguments";
+    try { log_directory = std::filesystem::current_path() / "storage" / "logs"; }
+    catch (...) {}
     try {
         if (argc < 1 || !argv || !configure || !execute)
             throw std::invalid_argument("Console requires arguments and callbacks");
@@ -37,10 +43,14 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
         }
         auto root = std::move(options.root);
         if (root.empty()) root = std::filesystem::current_path();
+        project_root = root;
         root = std::filesystem::canonical(root);
         if (!std::filesystem::is_directory(root)) throw std::invalid_argument("Project root must be a directory");
+        project_root = root;
+        log_directory = root / "storage" / "logs";
         metrics::StartupMetrics startup;
         // Etapa 1: cargar y validar el entorno antes de cualquier configuración.
+        phase = "load_environment";
         const auto environment_started = Clock::now();
         FileEnvironment source(root, options.environment);
         const Env reader(source);
@@ -53,19 +63,23 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
         debug = debug || identity.debug;
         // Etapa 2: cargar mapas de configuración usando el entorno ya disponible.
         // Su ámbito incluye configure, execute y cierre; nunca se propaga a otros hilos.
+        phase = "load_configuration";
         const auto configuration_started = Clock::now();
         Config settings_map = load_config ? load_config() : Config{};
         startup.configuration = std::chrono::duration_cast<std::chrono::nanoseconds>(
             Clock::now() - configuration_started);
         const ConfigScope config_scope(settings_map);
         ConsoleContext context{std::move(root), std::move(identity), options.arguments, &settings_map};
+        phase = "configure_console";
         const auto settings_started = Clock::now();
         auto settings = configure(context);
+        if (!settings.logs.directory.empty()) log_directory = settings.logs.directory;
         // La presentación detallada depende del entorno resuelto, no de cada comando.
         settings.errors.environment = debug ? Environment::development : Environment::production;
         startup.settings = std::chrono::duration_cast<std::chrono::nanoseconds>(
             Clock::now() - settings_started);
         const auto boot_started = Clock::now();
+        phase = "boot_application";
         Application application(std::move(settings.logs), std::move(settings.errors));
         application.boot();
         startup.application_boot = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -82,12 +96,15 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
                 stream->start(context.root);
             } catch (const std::exception& error) {
                 // El canal de observación es opcional; un fallo no debe detener la aplicación.
+                const auto description = Messages::get("runtime.metrics_stream_failed.description");
+                const auto action = Messages::get("runtime.metrics_stream_failed.action");
                 const std::array<ContextField, 1> fields{{{"reason", error.what()}}};
-                (void)application.log(LogLevel::warning, "metrics.stream_start_failed",
+                const auto status = application.log(LogLevel::warning, "metrics.stream_start_failed",
                                       "start_metrics_stream",
-                                      "No se pudo abrir el monitor local; se mostrarán métricas aquí.",
-                                      fields);
-                std::cerr << "[Kotavel] No se pudo abrir el monitor local; se mostrarán métricas aquí.\n";
+                                      description, fields);
+                std::cerr << "[Kotavel] " << description << ' ' << action << '\n';
+                if (status == ReportStatus::failed)
+                    std::cerr << Messages::get("runtime.diagnostic_not_saved.description") << '\n';
                 if (debug) std::cerr << error.what() << '\n';
                 print_metrics_to_console = true;
                 stream.reset();
@@ -134,6 +151,7 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
             if (const auto initial = initial_collector.sample()) publish_sample(*initial);
             monitor.start(settings.metrics.interval, publish_sample, std::move(initial_collector));
         }
+        phase = "execute_application";
         const auto code = execute(application, context);
         // No convertir un fallo fatal ignorado por el consumidor en una salida exitosa.
         const bool failed = application.state() == ApplicationState::failed ||
@@ -148,21 +166,64 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
         const std::string message_key = "env.open_failed." + std::string(OS::key()) + ".";
         const auto description = Messages::get(message_key + "description", {{"file", file}});
         // Aún no existe Application; BootstrapLogger encapsula el registro previo al arranque.
-        (void)BootstrapLogger::environment_file_open_failed(
+        const auto log_status = BootstrapLogger::environment_file_open_failed(
             error.path().parent_path() / "storage" / "logs", file, example,
             error.path().parent_path().string(), error.what(), description);
         std::cerr << description << '\n'
                   << Messages::get(message_key + "action", {{"file", file}, {"example", example}}) << '\n'
                   << Messages::get(message_key + "command", {{"example", example}, {"file", file}}) << '\n';
+        if (log_status == ReportStatus::failed)
+            std::cerr << Messages::get("runtime.startup_failed.log_failed", {
+                {"log_file", (error.path().parent_path() / "storage" / "logs" / "kotavel.log").string()}}) << '\n';
+        if (debug) std::cerr << error.what() << '\n';
+        return 1;
+    } catch (const detail::EnvironmentFileInvalidError& error) {
+        const auto file = error.path().filename().string();
+        const auto description = error.line()
+            ? Messages::get("env.invalid.line", {{"file", file}, {"line", std::to_string(error.line())}})
+            : Messages::get("env.invalid.file", {{"file", file}});
+        const auto log_status = BootstrapLogger::environment_file_invalid(
+            log_directory, file, error.path().parent_path().string(), error.line(),
+            error.what(), description);
+        std::cerr << description << '\n' << Messages::get("env.invalid.action") << '\n';
+        if (log_status == ReportStatus::failed)
+            std::cerr << Messages::get("runtime.startup_failed.log_failed", {
+                {"log_file", (log_directory / "kotavel.log").string()}}) << '\n';
+        if (debug) std::cerr << error.what() << '\n';
+        return 1;
+    } catch (const detail::ConsoleSettingsError& error) {
+        const auto description = Messages::get("runtime.configuration_invalid.description",
+            {{"key", error.key()}});
+        const auto log_status = BootstrapLogger::configuration_invalid(
+            log_directory, project_root.string(), error.key(), error.reason(), description);
+        std::cerr << description << '\n'
+                  << Messages::get("runtime.configuration_invalid.action", {{"reason", error.reason()}}) << '\n';
+        if (log_status == ReportStatus::failed)
+            std::cerr << Messages::get("runtime.startup_failed.log_failed", {
+                {"log_file", (log_directory / "kotavel.log").string()}}) << '\n';
         if (debug) std::cerr << error.what() << '\n';
         return 1;
     } catch (const std::exception& error) {
-        // Application libera sus recursos por RAII antes de informar un fallo externo.
-        std::cerr << "No se pudo iniciar o ejecutar Kotavel.\n";
+        const auto description = Messages::get("runtime.startup_failed.description");
+        const auto log_file = log_directory / "kotavel.log";
+        const auto log_status = BootstrapLogger::startup_failed(
+            log_directory, project_root.string(), phase, error.what(), description);
+        std::cerr << description << '\n'
+                  << Messages::get("runtime.startup_failed.action", {{"log_file", log_file.string()}}) << '\n';
+        if (log_status == ReportStatus::failed)
+            std::cerr << Messages::get("runtime.startup_failed.log_failed", {{"log_file", log_file.string()}}) << '\n';
         if (debug) std::cerr << error.what() << '\n';
         return 1;
     } catch (...) {
-        std::cerr << "Kotavel terminó por un error inesperado.\n";
+        const auto description = Messages::get("runtime.startup_failed.description");
+        const auto log_file = log_directory / "kotavel.log";
+        const auto log_status = BootstrapLogger::startup_failed(
+            log_directory, project_root.string(), phase,
+            "Unknown non-standard exception", description);
+        std::cerr << description << '\n'
+                  << Messages::get("runtime.startup_failed.action", {{"log_file", log_file.string()}}) << '\n';
+        if (log_status == ReportStatus::failed)
+            std::cerr << Messages::get("runtime.startup_failed.log_failed", {{"log_file", log_file.string()}}) << '\n';
         return 1;
     }
 }

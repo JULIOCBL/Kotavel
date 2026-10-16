@@ -1,0 +1,18 @@
+{
+  "startup_failed": {
+    "description": "Kotavel no pudo iniciar o completar la operación.",
+    "action": "Revisa el registro en `:log_file`. Ejecuta con `--debug` para ver el detalle técnico.",
+    "log_failed": "No se pudo guardar el registro en `:log_file`; revisa los permisos de esa carpeta."
+  },
+  "configuration_invalid": {
+    "description": "La opción de configuración `:key` no es válida.",
+    "action": ":reason"
+  },
+  "metrics_stream_failed": {
+    "description": "No se pudo abrir el monitor local de métricas.",
+    "action": "Kotavel continuará y mostrará las métricas en esta consola."
+  },
+  "diagnostic_not_saved": {
+    "description": "No se pudo guardar el diagnóstico en el archivo de log."
+  }
+}
