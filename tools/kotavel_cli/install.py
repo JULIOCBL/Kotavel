@@ -387,6 +387,9 @@ def main(argv=None):
 if __name__ == '__main__':
     try:
         main()
-    except (RuntimeError, OSError, subprocess.CalledProcessError, configparser.Error) as error:
+    except subprocess.CalledProcessError as error:
+        print(f'ERROR: El proceso terminó con código {error.returncode}. Revisa el diagnóstico anterior.', file=sys.stderr)
+        sys.exit(1)
+    except (RuntimeError, OSError, configparser.Error) as error:
         print(f'ERROR: {error}', file=sys.stderr)
         sys.exit(1)

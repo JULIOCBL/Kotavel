@@ -56,6 +56,26 @@ decide dónde mostrarlo. Su `exit_code` es 1 porque representa una operación
 fallida; una demostración que se recupera y termina otra operación puede salir
 con éxito. Si no existe un incidente, devuelve `std::nullopt`.
 
+Para eventos normales de cualquier módulo que recibe `Application&`, usa
+`Application::log()`. Así se comparten el canal, el formato, los filtros, la
+rotación y el bloqueo del logger activo; no crees un `Logger` por cada evento:
+
+```cpp
+const auto status = app.log(kotavel::LogLevel::info, "server.started",
+                            "listen", "Servidor escuchando en el puerto 8080");
+```
+
+El estado permite distinguir una escritura de un evento filtrado o de un fallo.
+Se pueden pasar campos adicionales como último argumento (`span` de
+`ContextField`). El registro usa el módulo configurado en `LogOptions`; después
+de `shutdown()` o antes de `boot()`, devuelve `ignored`.
+
+Para registros anteriores a `Application::boot()`, usa `BootstrapLogger`.
+`write(directory, record)` acepta eventos generales; métodos específicos, como
+`environment_file_open_failed(...)`, encapsulan los campos propios de un evento.
+La clase configura el destino temporal de archivo y devuelve `failed` si no está
+disponible.
+
 - **Producción:** mensaje público genérico o configurado y referencia de operación.
   No se incluyen causa técnica, archivo, función ni traza.
 - **Desarrollo:** añade código, causa, ubicación y traza cuando estén disponibles.
@@ -191,11 +211,13 @@ reporte produce `false` y un aviso mínimo por `stderr`.
 salvo reglas explícitas. Un umbral superior puede ocultarlos del registro sin
 cambiar el resultado de la operación.
 
-`kotavel.log` contiene JSON por línea: fecha UTC, nivel, módulo, código,
-identificador y mensaje; en los errores de Application también archivo, línea,
-función, origen de la traza y pila. Los campos y las trazas se acotan para
-respetar el límite de tamaño; los controles se escapan. Los mensajes deben ser
-UTF-8 y no contener secretos: no hay redacción automática.
+`kotavel.log` usa líneas de texto estilo Laravel, con fecha UTC, módulo y nivel
+en mayúsculas, seguidos por el mensaje: `[2026-10-16 05:39:12] app.ERROR: ...`.
+Cuando hay datos adicionales, se agrega un objeto JSON con código, operación y
+contexto. Los errores incluyen un campo `exception` con el tipo, archivo, línea,
+función y traza; las causas anidadas aparecen allí también. Los campos y las
+trazas se acotan para respetar el límite de tamaño; los controles se escapan.
+Los mensajes deben ser UTF-8 y no contener secretos: no hay redacción automática.
 
 Al alcanzar el límite se rota a `kotavel.log.1`, `.2`, etc. La carpeta se bloquea durante la vida del logger mediante `.kotavel.lock`.
 Una segunda instancia o proceso que use esa misma carpeta falla al iniciar.
@@ -368,7 +390,7 @@ para que el consumidor siga usando los mismos includes y helpers.
 | | `stack_trace.cpp` | Captura y formato de trazas nativas |
 | | `error_renderer.cpp` | Presentación pública y de desarrollo |
 | | `logger.cpp` | Escritura, rotación, filtrado y límites de reportes |
-| | `log_formatter.cpp` | Serialización JSON y límites de contenido |
+| | `log_formatter.cpp` | Formato de texto Laravel y límites del registro |
 | `src/foundation/` | `application.cpp` | Estados y ciclo de vida |
 | | `application_errors.cpp` | Retención, reporte y presentación de errores |
 | `src/console/` | `runtime.cpp` | Arranque y ejecución de consola |

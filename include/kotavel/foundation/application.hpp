@@ -39,6 +39,11 @@ public:
                                           const std::function<void()>& action);
     [[nodiscard]] OperationResult execute(const OperationContext& operation,
                                           const std::function<void()>& action);
+    // Emite un registro usando el mismo destino, formato y filtros de la aplicación.
+    // Devuelve ignored si el logger todavía no se ha creado o ya se liberó.
+    [[nodiscard]] ReportStatus log(LogLevel level, std::string_view code,
+                                   std::string_view operation, std::string_view message,
+                                   std::span<const ContextField> fields = {}) noexcept;
     void shutdown() noexcept;
     // Se borra al iniciar la siguiente operación. No conservar la referencia.
     [[nodiscard]] const std::optional<ErrorDetails>& last_error() const noexcept { return last_error_; }

@@ -48,8 +48,11 @@ int main() {
         check(development.find("private-host") != std::string::npos &&
               development.find("diagnostics_tests.cpp") != std::string::npos, "development details");
         const auto log = read(root.path / "production/kotavel.log");
-        check(log.find("\"file\":") != std::string::npos &&
-              log.find("\"stack\":") != std::string::npos, "structured internal log");
+        check(log.find(".ERROR: ") != std::string::npos &&
+              log.find("\"exception\":\"[object]") != std::string::npos &&
+              log.find("diagnostics_tests.cpp") != std::string::npos &&
+              log.find("\\n[stacktrace]\\n") != std::string::npos,
+              "Laravel-style log includes exception source and stack trace");
         check(app.execute("next", [] {}) == kotavel::OperationResult::success, "next operation works");
         check(!app.last_error() && !app.present_error(), "do not leak previous incident");
         check(app.execute("external", [] { throw std::runtime_error("external-secret"); }) ==
@@ -71,7 +74,7 @@ int main() {
         check(configured.execute("custom-1", [] {
             throw kotavel::DiagnosticError("custom", "private");
         }) == kotavel::OperationResult::fatal_error, "severity cannot change recovery");
-        check(read(root.path / "rules/kotavel.log").find("\"level\":\"notice\"") !=
+        check(read(root.path / "rules/kotavel.log").find(".NOTICE: ") !=
               std::string::npos, "custom report level");
         configured.shutdown();
 

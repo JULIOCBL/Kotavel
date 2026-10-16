@@ -18,6 +18,7 @@ permiten reproducir las primeras mediciones del núcleo.
 ```text
 include/kotavel/   Interfaces públicas del núcleo y módulos reservados
 src/              Implementación del núcleo y módulos reservados
+resources/messages/ Catálogos JSON de mensajes internos por módulo
 CMakeLists.txt    Target público e instalación
 conanfile.py      Resolución de dependencias y empaquetado
 tools/kotavel_cli/ Herramientas Python compartidas
@@ -32,6 +33,23 @@ docs/blueprint/   Diseño propuesto y decisiones pendientes
 
 Los módulos futuros conservan `.gitkeep`. Cada nueva implementación debe
 incorporarse explícitamente a su target CMake.
+
+Los textos internos se obtienen mediante `Messages::get()` en `src/text/messages.hpp`.
+La clave combina el nombre del catálogo con su ruta anidada, por ejemplo
+`env.open_failed.windows.description`; los parámetros `{{"file", ".env"}}` sustituyen
+marcadores como `:file`. Los nombres usan letras ASCII, números y `_`, sin
+empezar por un número. Los valores se insertan literalmente y no se reinterpretan.
+Una clave válida pero desconocida lanza `std::out_of_range`; una clave mal formada,
+un parámetro requerido ausente, duplicado, sobrante o con nombre inválido lanza
+`std::invalid_argument`. CMake valida y convierte `resources/messages/*.json` en cadenas
+compiladas: no se leen catálogos en ejecución ni se agrega un parser al núcleo.
+El nombre `open_failed` incluye cualquier fallo al abrir el entorno, no solo
+la ausencia del archivo. Este módulo prepara textos; la consola decide cómo mostrarlos.
+
+La detección del sistema operativo está disponible en
+`<kotavel/system/os.hpp>` mediante `kotavel::OS::type` y los helpers
+`isWindows()`, `isMac()`, `isLinux()` y `name()`. Para mostrar el nombre usa
+`std::cout << kotavel::OS::name()`; `type` se conserva para comparaciones.
 
 ## Utilizar desde el Laboratorio
 

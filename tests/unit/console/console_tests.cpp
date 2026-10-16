@@ -1,4 +1,7 @@
 #include <kotavel/console/runtime.hpp>
+#include <kotavel/system/os.hpp>
+#include <iostream>
+#include <sstream>
 #include <fstream>
 #include <chrono>
 #include <stdexcept>
@@ -65,5 +68,46 @@ int main() {
         return kotavel::config<std::string>("app.env") == "production" ? 0 : 1;
     };
     if (kotavel::run_console(2, args, configure_after_load, execute_after_load, {}, load) != 0) return 1;
+    // El diagnóstico de entorno conserva las tres líneas y el comando de la plataforma.
+    const auto missing_root = root / "missing-env";
+    std::filesystem::create_directories(missing_root);
+    auto missing_option = "--project-root=" + missing_root.string();
+    char* missing_args[] = {name, missing_option.data()};
+    std::ostringstream diagnostic;
+    struct RestoreStream {
+        std::streambuf* previous;
+        ~RestoreStream() { std::cerr.rdbuf(previous); }
+    } restore{std::cerr.rdbuf(diagnostic.rdbuf())};
+    configured = false;
+    const auto missing_code = kotavel::run_console(2, missing_args, configure, execute);
+    const std::string description =
+        "No se pudo abrir el archivo de entorno `.env` en la raíz del proyecto.\n";
+    std::string expected = description;
+    switch (kotavel::OS::type) {
+        case kotavel::OSType::WINDOWS:
+            expected += "Verifica que `.env` exista y tenga permisos de lectura. Si falta, créalo desde `.env.example`.\n"
+                        "En PowerShell: Copy-Item -LiteralPath '.env.example' -Destination '.env'\n";
+            break;
+        case kotavel::OSType::MACOS:
+            expected += "Verifica que `.env` exista y tengas permisos de lectura. Si falta, créalo desde `.env.example`.\n"
+                        "En Terminal: cp '.env.example' '.env'\n";
+            break;
+        case kotavel::OSType::LINUX:
+            expected += "Verifica que `.env` exista y tengas permisos de lectura. Si falta, créalo desde `.env.example`.\n"
+                        "En la terminal: cp '.env.example' '.env'\n";
+            break;
+        default:
+            expected += "Verifica que `.env` exista y que Kotavel tenga permisos para leerlo. Si falta, créalo desde `.env.example`.\n"
+                        "Copia manualmente `.env.example` como `.env`.\n";
+            break;
+    }
+    if (missing_code != 1 || configured || diagnostic.str() != expected) return 1;
+    std::ifstream bootstrap_log(missing_root / "storage" / "logs" / "kotavel.log");
+    const std::string logged((std::istreambuf_iterator<char>(bootstrap_log)),
+                             std::istreambuf_iterator<char>());
+    if (logged.find("bootstrap.ERROR: No se pudo abrir el archivo de entorno `.env`") == std::string::npos ||
+        logged.find("environment.file_open_failed") == std::string::npos ||
+        logged.find("\"example\":\".env.example\"") == std::string::npos)
+        return 1;
     return 0;
 }

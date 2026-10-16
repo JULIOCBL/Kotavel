@@ -92,7 +92,9 @@ def main(argv=None):
     except KeyboardInterrupt:
         print('Operación cancelada.', file=sys.stderr)
         return 130
-    except (RuntimeError, OSError, ValueError, SyntaxError, configparser.Error,
-            subprocess.CalledProcessError) as error:
+    except subprocess.CalledProcessError as error:
+        print(f'ERROR: El proceso terminó con código {error.returncode}. Revisa el diagnóstico anterior.', file=sys.stderr)
+        return 1
+    except (RuntimeError, OSError, ValueError, SyntaxError, configparser.Error) as error:
         print(f'ERROR: {error}', file=sys.stderr)
         return 1

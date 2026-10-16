@@ -18,6 +18,10 @@ allí el flujo de preparación y compilación.
 
 ## Núcleo C++
 
+`kotavel.messages` verifica sustitución de parámetros, valores literales,
+comandos Windows/Unix y errores de claves o parámetros. `kotavel.console`
+también comprueba el diagnóstico completo cuando no existe el archivo de entorno.
+
 Desde Kotavel, con CMake y un compilador C++23 disponibles:
 
 ```sh
@@ -88,7 +92,7 @@ no cambian la forma de invocar cada suite.
 
 Las fuentes unitarias se organizan por módulo en `tests/unit/config/`,
 `tests/unit/env/`, `tests/unit/console/`, `tests/unit/metrics/`, `tests/unit/core/`,
-`tests/unit/diagnostics/` y `tests/unit/logging/`. Las pruebas entre procesos
+`tests/unit/system/`, `tests/unit/diagnostics/` y `tests/unit/logging/`. Las pruebas entre procesos
 permanecen en `tests/integration/`.
 
 `kotavel.console.logging` verifica el adaptador Config → LogOptions: defaults,

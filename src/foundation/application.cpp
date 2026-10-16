@@ -70,6 +70,14 @@ OperationResult Application::execute(const OperationContext& operation,
     return OperationResult::fatal_error;
 }
 
+ReportStatus Application::log(LogLevel level, std::string_view code,
+                              std::string_view operation, std::string_view message,
+                              std::span<const ContextField> fields) noexcept {
+    if (!logger_) return ReportStatus::ignored;
+    const LogRecord record{level, code, operation, message, {}, fields};
+    return logger_->write(record);
+}
+
 void Application::shutdown() noexcept {
     // No destruir el logger mientras una operación todavía lo puede necesitar.
     // La parada se solicita desde el llamador, después de execute().

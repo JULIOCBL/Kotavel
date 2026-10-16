@@ -1,5 +1,10 @@
 #include <kotavel/console/runtime.hpp>
 #include "arguments.hpp"
+#include "../env/environment_internal.hpp"
+#include "../text/messages.hpp"
+#include <kotavel/system/os.hpp>
+#include <kotavel/diagnostics/bootstrap_logger.hpp>
+#include <array>
 #include <iomanip>
 #include <iostream>
 #include <mutex>
@@ -77,6 +82,11 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
                 stream->start(context.root);
             } catch (const std::exception& error) {
                 // El canal de observación es opcional; un fallo no debe detener la aplicación.
+                const std::array<ContextField, 1> fields{{{"reason", error.what()}}};
+                (void)application.log(LogLevel::warning, "metrics.stream_start_failed",
+                                      "start_metrics_stream",
+                                      "No se pudo abrir el monitor local; se mostrarán métricas aquí.",
+                                      fields);
                 std::cerr << "[Kotavel] No se pudo abrir el monitor local; se mostrarán métricas aquí.\n";
                 if (debug) std::cerr << error.what() << '\n';
                 print_metrics_to_console = true;
@@ -132,6 +142,20 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
         if (stream) stream->stop();
         application.shutdown();
         return failed && code == 0 ? 1 : code;
+    } catch (const detail::EnvironmentFileOpenError& error) {
+        const auto file = error.path().filename().string();
+        const auto example = file + ".example";
+        const std::string message_key = "env.open_failed." + std::string(OS::key()) + ".";
+        const auto description = Messages::get(message_key + "description", {{"file", file}});
+        // Aún no existe Application; BootstrapLogger encapsula el registro previo al arranque.
+        (void)BootstrapLogger::environment_file_open_failed(
+            error.path().parent_path() / "storage" / "logs", file, example,
+            error.path().parent_path().string(), error.what(), description);
+        std::cerr << description << '\n'
+                  << Messages::get(message_key + "action", {{"file", file}, {"example", example}}) << '\n'
+                  << Messages::get(message_key + "command", {{"example", example}, {"file", file}}) << '\n';
+        if (debug) std::cerr << error.what() << '\n';
+        return 1;
     } catch (const std::exception& error) {
         // Application libera sus recursos por RAII antes de informar un fallo externo.
         std::cerr << "No se pudo iniciar o ejecutar Kotavel.\n";

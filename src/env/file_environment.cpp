@@ -9,7 +9,7 @@ FileEnvironment::FileEnvironment(const std::filesystem::path& root, std::string_
         throw std::invalid_argument("Selected environment must be local, development or production");
     const auto path = root / (environment == "production" ? ".env" : ".env." + std::string(environment));
     std::ifstream file(path, std::ios::binary);
-    if (!file) throw std::runtime_error("Cannot open environment file: " + path.string());
+    if (!file) throw detail::EnvironmentFileOpenError(path);
     // Acotar también el archivo antes de reservar memoria o analizar sus líneas.
     std::string content;
     char c;

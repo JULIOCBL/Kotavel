@@ -27,6 +27,8 @@ int main() {
         const LogLevel levels[] = {LogLevel::trace, LogLevel::debug, LogLevel::info,
             LogLevel::notice, LogLevel::warning, LogLevel::error, LogLevel::critical, LogLevel::alert, LogLevel::emergency};
         const char* names[] = {"trace", "debug", "info", "notice", "warning", "error", "critical", "alert", "emergency"};
+        const char* formatted_names[] = {"TRACE", "DEBUG", "INFO", "NOTICE", "WARNING",
+            "ERROR", "CRITICAL", "ALERT", "EMERGENCY"};
         // Comprobar cada umbral, incluyendo exactamente su nivel y los superiores.
         for (int threshold = 0; threshold < 9; ++threshold) {
             kotavel::Logger filtered({root.path / names[threshold], 16384, 2, false,
@@ -37,7 +39,7 @@ int main() {
             std::string record;
             for (int level = threshold; level < 9; ++level) {
                 check(bool(std::getline(logs, record)), "missing accepted level");
-                check(record.find(std::string("\"level\":\"") + names[level] + '"') !=
+                check(record.find(std::string(".") + formatted_names[level] + ": ") !=
                       std::string::npos, "incorrect serialized level");
             }
             check(!std::getline(logs, record), "filtered levels must not be written");
@@ -75,8 +77,8 @@ int main() {
         std::ifstream input(root.path / "kotavel.log");
         std::string line; std::getline(input, line);
         check(line.find("failure-1") != std::string::npos, "diagnostic context");
-        check(line.find("\"level\":\"error\"") != std::string::npos, "default error level");
-        check(line.find("controlled\\u000aerror") != std::string::npos, "escape multiline error");
+        check(line.find(".ERROR: ") != std::string::npos, "default error level");
+        check(line.find("controlled\\\\nerror") != std::string::npos, "escape multiline error");
         check(!std::getline(input, line), "one line per incident");
         input.close();
         check(app.execute("unexpected", [] { throw std::runtime_error("unknown state"); }) ==
@@ -85,7 +87,7 @@ int main() {
         std::ifstream fatal_log(root.path / "kotavel.log");
         std::getline(fatal_log, line);
         std::getline(fatal_log, line);
-        check(line.find("\"level\":\"critical\"") != std::string::npos, "fatal level");
+        check(line.find(".CRITICAL: ") != std::string::npos, "fatal level");
         fatal_log.close();
         rejected = false;
         try { (void)app.execute("unsafe", [] {}); }

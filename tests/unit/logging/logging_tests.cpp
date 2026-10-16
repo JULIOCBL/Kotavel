@@ -55,9 +55,12 @@ int main(int argc, char** argv) {
         check(error.report_status == ReportStatus::written, "report status");
         check(app.present_error()->detail.empty(), "production hides context and causes");
         const auto log = read(options.directory / "kotavel.log");
-        check(log.find("\"module\":\"orders\"") != std::string::npos &&
+        check(log.find(" orders.ERROR: ") != std::string::npos &&
               log.find("\"order_id\":\"123\"") != std::string::npos &&
-              log.find("root cause") != std::string::npos, "structured payload");
+              log.find("root cause") != std::string::npos &&
+              log.find("[stacktrace]") != std::string::npos &&
+              log.find("\"exception\":\"[object]") != std::string::npos,
+              "Laravel-style message, context and exception trace");
         const std::vector<ContextField> duplicate{{"id", "1"}, {"id", "2"}};
         bool invalid_context = false;
         try { (void)app.execute(OperationContext{"bad", "orders", duplicate}, [] {}); }
@@ -114,7 +117,8 @@ int main(int argc, char** argv) {
         std::ifstream entries(concurrent.directory / "kotavel.log");
         std::string line; int count = 0;
         while (std::getline(entries, line)) {
-            check(line.starts_with('{') && line.ends_with('}'), "complete concurrent records");
+            check(line.starts_with('[') && line.find(".INFO: ") != std::string::npos &&
+                  line.ends_with('}'), "complete concurrent records");
             ++count;
         }
         check(count == 400, "no missing or interleaved lines");

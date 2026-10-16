@@ -1,8 +1,11 @@
 cmake_minimum_required(VERSION 3.25)
 project(Kotavel VERSION 0.1.0 LANGUAGES CXX)
 
+include(cmake/Messages.cmake)
+
 # Núcleo compilado: ciclo de vida y diagnóstico sin dependencias externas.
 add_library(kotavel_core STATIC
+    src/text/messages.cpp
     # Configuración: mapas y consultas en memoria; entorno separado en src/env/.
     src/config/config.cpp
     src/config/config_operations.cpp
@@ -25,6 +28,7 @@ add_library(kotavel_core STATIC
     src/foundation/application.cpp
     src/foundation/application_errors.cpp
     src/diagnostics/logger.cpp
+    src/diagnostics/bootstrap_logger.cpp
     src/diagnostics/log_formatter.cpp
     src/diagnostics/error.cpp
     src/diagnostics/stack_trace.cpp
@@ -56,6 +60,7 @@ set_target_properties(kotavel_core PROPERTIES CXX_EXTENSIONS OFF EXPORT_NAME Cor
 target_include_directories(kotavel_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
+target_include_directories(kotavel_core PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated/text")
 
 # Conan utiliza estas reglas al construir el paquete distribuible.
 include(GNUInstallDirs)
@@ -71,6 +76,9 @@ option(KOTAVEL_BUILD_TESTS "Build Kotavel runtime tests" ${PROJECT_IS_TOP_LEVEL}
 if(KOTAVEL_BUILD_TESTS)
     enable_testing()
     find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    add_executable(kotavel_messages_tests tests/unit/text/messages_tests.cpp)
+    target_link_libraries(kotavel_messages_tests PRIVATE Kotavel::Core)
+    add_test(NAME kotavel.messages COMMAND kotavel_messages_tests)
     # Las fuentes unitarias se agrupan por módulo bajo tests/unit/.
     add_executable(kotavel_config_tests tests/unit/config/config_tests.cpp)
     target_link_libraries(kotavel_config_tests PRIVATE Kotavel::Core)
@@ -92,6 +100,9 @@ if(KOTAVEL_BUILD_TESTS)
     add_executable(kotavel_metrics_tests tests/unit/metrics/metrics_tests.cpp)
     target_link_libraries(kotavel_metrics_tests PRIVATE Kotavel::Core)
     add_test(NAME kotavel.metrics COMMAND kotavel_metrics_tests)
+    add_executable(kotavel_os_tests tests/unit/system/os_tests.cpp)
+    target_link_libraries(kotavel_os_tests PRIVATE Kotavel::Core)
+    add_test(NAME kotavel.os COMMAND kotavel_os_tests)
     add_executable(kotavel_metrics_stream_fixture tests/unit/metrics/metrics_stream_fixture.cpp)
     target_link_libraries(kotavel_metrics_stream_fixture PRIVATE Kotavel::Core)
     add_test(NAME kotavel.metrics.stream COMMAND ${Python3_EXECUTABLE}

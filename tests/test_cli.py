@@ -1,5 +1,5 @@
 import importlib.util
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 import io
 import json
 from pathlib import Path
@@ -29,6 +29,16 @@ class ConsumerToolsTests(unittest.TestCase):
             with self.subTest(name=name), patch.object(install, 'main') as command:
                 self.assertEqual(cli.main(['--project', str(self.root), name, '--build-type', 'Release']), 0)
             command.assert_called_once_with([flag, '--build-type', 'Release', '--project', str(self.root.resolve())])
+
+    def test_process_failure_does_not_dump_python_command_repr(self):
+        output = io.StringIO()
+        failure = subprocess.CalledProcessError(1, ['kotavel-lab.exe', '--env=production'])
+        with patch.object(install, 'main', side_effect=failure), redirect_stderr(output):
+            self.assertEqual(cli.main(['--project', str(self.root), 'run']), 1)
+        self.assertEqual(
+            output.getvalue(),
+            'ERROR: El proceso terminó con código 1. Revisa el diagnóstico anterior.\n',
+        )
 
     def test_invalid_project_returns_error_without_starting_tools(self):
         with patch.object(install, 'ROOT', self.root), patch.object(install, 'TOOLS', self.root / '.kotavel/tools'), patch.object(install, 'CONAN_HOME', self.root / '.kotavel/conan'), patch.object(install, 'prepare_platform') as prepare, patch('sys.stderr'):

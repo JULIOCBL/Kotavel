@@ -16,7 +16,7 @@ class KotavelConan(ConanFile):
     author = "Julio Cesar Borges Lopez"
     package_type = "static-library"
     settings = "os", "compiler", "build_type", "arch"
-    exports_sources = "CMakeLists.txt", "include/*", "src/*", "cmake/*", "LICENSE"
+    exports_sources = "CMakeLists.txt", "include/*", "src/*", "cmake/*", "resources/*", "LICENSE"
     default_options = FRAMEWORK_OPTIONS
 
     def requirements(self):
