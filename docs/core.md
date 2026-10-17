@@ -1,8 +1,9 @@
 # Uso del núcleo
 
 Enlaza `Kotavel::Core` e incluye `<kotavel/foundation/application.hpp>`.
-El núcleo ejecuta una operación cada vez, desde el mismo hilo; no incluye un
-servidor, ejecutor asíncrono ni contenedor de servicios.
+El núcleo ejecuta una operación cada vez, desde el mismo hilo. El runtime de
+consola incluye un contenedor explícito para servicios y proveedores; consulta
+[Contenedor de servicios](container.md) para el registro y su ciclo de vida.
 
 ```cpp
 kotavel::LogOptions logs{project_root / "storage" / "logs"};
@@ -352,7 +353,11 @@ se entregan en ConsoleContext al consumidor; este debe validarlos. Los callbacks
 son síncronos y no deben conservar las vistas del contexto. ConfigureConsole
 entrega opciones de logging y errores; la presentación se fija según APP_DEBUG
 o --development. ExecuteConsole recibe Application lista y devuelve un código
-de salida. El cierre ocurre al terminar y por RAII si el callback lanza.
+de salida. Las excepciones de configuración, registro o boot de providers se
+registran en `storage/logs/kotavel.log` como `runtime.startup_failed`, con la
+fase y el motivo; por ejemplo, un grupo de rutas inválido durante `boot_services`
+queda registrado antes de que se ejecute el callback principal. El cierre ocurre
+al terminar y por RAII si el callback lanza.
 
 `execute_console` ejecuta una operación y presenta sus errores y fallos del
 logger. El consumidor decide qué resultados recuperables permiten continuar.
@@ -414,6 +419,8 @@ y finalizar correctamente según la política del consumidor.
 ## Configuración en memoria con `Config`
 
 Para el uso del entorno y de `Config`, consulta [Configuración](configuration.md).
+Para construir servicios compartidos desde el runtime, consulta
+[Contenedor de servicios](container.md).
 Para el funcionamiento interno, costes y garantías de la implementación, consulta
 la [referencia interna de Config](internals/config.md).
 

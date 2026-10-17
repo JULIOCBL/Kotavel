@@ -2,7 +2,10 @@
 
 **Kotavel puede combinar la facilidad de desarrollo de Laravel con un runtime eficiente en C++.** Para conseguirlo, debemos diseñar primero una base que permita añadir capacidades sin rehacer el framework. El rendimiento es una prioridad de diseño y debe demostrarse con mediciones reproducibles, junto con corrección y estabilidad.
 
-Este documento describe la arquitectura objetivo. Existe una primera implementación estática de `Kotavel::Core` con ciclo de vida síncrono, diagnóstico con ubicación/trazas y presentación de errores por entorno, documentada en [Uso del núcleo](../core.md), además de las herramientas Python. Los demás componentes siguen reservados. Esta primera entrega aún requiere validación nativa en Windows y Linux y validación de rendimiento representativa antes de cumplir todos los criterios de aceptación. Existen [microbenchmarks exploratorios](../../benchmarks/README.md), todavía sin presupuesto de producción. Cada `.cpp` se incorpora explícitamente a su target CMake.
+Este documento describe la arquitectura objetivo. Existe una primera implementación estática de `Kotavel::Core` con ciclo de vida síncrono, diagnóstico con ubicación/trazas, presentación por entorno y un contenedor explícito de servicios con providers. Las rutas API/web, middleware, deep links y un ciclo inicial desktop ya tienen implementación; el adaptador HTTP Drogon y el adaptador Qt Quick son opcionales. Consulta [Uso del núcleo](../core.md), [Contenedor de servicios](../container.md), [Rutas HTTP y deep links](../http.md) y [Aplicaciones de escritorio](../desktop.md). Persistencia sigue reservada. La asociación de deep links con el ejecutable y el control reiniciable de servicios desde desktop quedan pendientes. La implementación HTTP requiere validación nativa en Windows y Linux, pruebas de concurrencia y mediciones representativas antes de considerarse lista para producción. Cada `.cpp` se incorpora explícitamente a su target CMake.
+
+La convención para identificar kernels, providers y componentes con prefijos de
+framework o de proyecto está definida en [Convención de nombres](naming.md).
 
 **La continuidad controlada de la aplicación y la facilidad de depuración son requisitos fundamentales del núcleo.** Un fallo recuperable de una operación debe quedar aislado, con información suficiente para investigarlo y sin detener las demás operaciones. El rendimiento se evaluará junto con estos requisitos.
 
@@ -21,7 +24,7 @@ Laravel conecta sus componentes mediante un ciclo de arranque: carga la configur
 | Artisan | Comandos de desarrollo y aplicación | Herramientas de desarrollo y comandos del consumidor |
 | Base de datos, caché y colas | Funcionalidades listas para usar | Módulos opcionales con adaptadores |
 
-El contenedor de Laravel puede resolver e inyectar dependencias y construir automáticamente determinadas clases. En Kotavel proponemos comenzar con constructores y registros explícitos: muestran qué necesita cada servicio y permiten detectar incompatibilidades de tipos durante la compilación. [Contenedor de Laravel](https://laravel.com/framework/docs/container).
+El contenedor de Laravel puede resolver e inyectar dependencias y construir automáticamente determinadas clases. Kotavel comienza con fábricas, tipos y registros explícitos: muestran qué necesita cada servicio y no dependen de reflexión. La implementación inicial congela registros antes del boot, construye singletons bajo demanda y deja el cierre de proveedores en orden inverso. [Contenedor de Laravel](https://laravel.com/framework/docs/container).
 
 ## Núcleo pequeño y módulos opcionales
 

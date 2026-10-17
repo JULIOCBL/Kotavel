@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.25)
 project(Kotavel VERSION 0.1.0 LANGUAGES CXX)
 
+option(KOTAVEL_BUILD_HTTP "Build optional HTTP adapters" OFF)
+set(KOTAVEL_WITH_HTTP ${KOTAVEL_BUILD_HTTP})
+option(KOTAVEL_BUILD_DESKTOP_QT "Build optional Qt Quick desktop windows" OFF)
+
 include(cmake/Messages.cmake)
 
 # Núcleo compilado: ciclo de vida y diagnóstico sin dependencias externas.
@@ -18,6 +22,8 @@ add_library(kotavel_core STATIC
     src/env/environment_value.cpp
     src/env/env_helpers.cpp
     src/env/app_environment.cpp
+    # Contenedor explícito de servicios y su ciclo de vida.
+    src/container/container.cpp
     src/console/runtime.cpp
     src/console/settings.cpp
     src/console/arguments.cpp
@@ -62,12 +68,69 @@ target_include_directories(kotavel_core PUBLIC
     $<INSTALL_INTERFACE:include>)
 target_include_directories(kotavel_core PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated/text")
 
+# API y web son opcionales; solo este adaptador incorpora Drogon al ejecutable.
+add_library(kotavel_http_contract STATIC src/http/router.cpp src/http/kernel.cpp)
+add_library(Kotavel::HttpContract ALIAS kotavel_http_contract)
+target_compile_features(kotavel_http_contract PUBLIC cxx_std_23)
+set_target_properties(kotavel_http_contract PROPERTIES CXX_EXTENSIONS OFF EXPORT_NAME HttpContract)
+target_include_directories(kotavel_http_contract PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>)
+target_link_libraries(kotavel_http_contract PUBLIC Kotavel::Core)
+
+add_library(kotavel_desktop STATIC
+    src/desktop/deep_link_router.cpp
+    src/desktop/desktop.cpp)
+add_library(Kotavel::Desktop ALIAS kotavel_desktop)
+target_compile_features(kotavel_desktop PUBLIC cxx_std_23)
+set_target_properties(kotavel_desktop PROPERTIES CXX_EXTENSIONS OFF EXPORT_NAME Desktop)
+target_include_directories(kotavel_desktop PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>)
+
+if(KOTAVEL_BUILD_DESKTOP_QT)
+    find_package(Qt6 REQUIRED COMPONENTS Gui Qml Quick)
+    add_library(kotavel_desktop_qt STATIC src/desktop/qt_platform.cpp)
+    add_library(Kotavel::DesktopQt ALIAS kotavel_desktop_qt)
+    target_compile_features(kotavel_desktop_qt PUBLIC cxx_std_23)
+    set_target_properties(kotavel_desktop_qt PROPERTIES CXX_EXTENSIONS OFF EXPORT_NAME DesktopQt)
+    target_include_directories(kotavel_desktop_qt PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>)
+    target_link_libraries(kotavel_desktop_qt PUBLIC Kotavel::Desktop Qt6::Gui Qt6::Qml Qt6::Quick)
+endif()
+
+if(KOTAVEL_BUILD_HTTP)
+    find_package(Drogon CONFIG REQUIRED)
+    add_library(kotavel_http_drogon STATIC src/http/drogon_server.cpp)
+    add_library(Kotavel::HttpDrogon ALIAS kotavel_http_drogon)
+    target_compile_features(kotavel_http_drogon PUBLIC cxx_std_23)
+    set_target_properties(kotavel_http_drogon PROPERTIES CXX_EXTENSIONS OFF EXPORT_NAME HttpDrogon)
+    target_include_directories(kotavel_http_drogon PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>)
+    target_link_libraries(kotavel_http_drogon PUBLIC kotavel_http_contract Drogon::Drogon)
+    add_library(kotavel_http INTERFACE)
+    add_library(Kotavel::Http ALIAS kotavel_http)
+    set_target_properties(kotavel_http PROPERTIES EXPORT_NAME Http)
+    target_link_libraries(kotavel_http INTERFACE kotavel_http_drogon)
+endif()
+
 # Conan utiliza estas reglas al construir el paquete distribuible.
 include(GNUInstallDirs)
-install(TARGETS kotavel_core EXPORT KotavelTargets
+install(TARGETS kotavel_core kotavel_http_contract kotavel_desktop EXPORT KotavelTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+if(KOTAVEL_BUILD_DESKTOP_QT)
+    install(TARGETS kotavel_desktop_qt EXPORT KotavelTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+endif()
+if(KOTAVEL_BUILD_HTTP)
+    install(TARGETS kotavel_http_drogon EXPORT KotavelTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    install(TARGETS kotavel_http EXPORT KotavelTargets)
+endif()
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(EXPORT KotavelTargets NAMESPACE Kotavel:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Kotavel)
 
@@ -116,6 +179,18 @@ if(KOTAVEL_BUILD_TESTS)
     add_executable(kotavel_core_tests tests/unit/core/core_tests.cpp)
     target_link_libraries(kotavel_core_tests PRIVATE Kotavel::Core)
     add_test(NAME kotavel.core COMMAND kotavel_core_tests)
+    add_executable(kotavel_container_tests tests/unit/container/container_tests.cpp)
+    target_link_libraries(kotavel_container_tests PRIVATE Kotavel::Core)
+    add_test(NAME kotavel.container COMMAND kotavel_container_tests)
+    add_executable(kotavel_routes_tests tests/unit/http/routes_tests.cpp)
+    target_link_libraries(kotavel_routes_tests PRIVATE Kotavel::HttpContract Kotavel::Desktop)
+    add_test(NAME kotavel.routes COMMAND kotavel_routes_tests)
+    add_executable(kotavel_desktop_tests tests/unit/desktop/desktop_tests.cpp)
+    target_link_libraries(kotavel_desktop_tests PRIVATE Kotavel::Desktop)
+    add_test(NAME kotavel.desktop COMMAND kotavel_desktop_tests)
+    add_executable(kotavel_http_middleware_tests tests/unit/http/middleware_tests.cpp)
+    target_link_libraries(kotavel_http_middleware_tests PRIVATE Kotavel::HttpContract)
+    add_test(NAME kotavel.http.middleware COMMAND kotavel_http_middleware_tests)
     add_executable(kotavel_diagnostics_tests tests/unit/diagnostics/diagnostics_tests.cpp)
     target_link_libraries(kotavel_diagnostics_tests PRIVATE Kotavel::Core)
     add_test(NAME kotavel.diagnostics COMMAND kotavel_diagnostics_tests)

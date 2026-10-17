@@ -106,3 +106,21 @@ el callback después de que `stop()` regrese. La matriz nativa de CI compila y e
 estas mismas pruebas en Linux, macOS y Windows.
 `kotavel.metrics.stream` conecta un cliente local real y comprueba los eventos de
 arranque y muestra, el enlace a loopback y la eliminación del descriptor al cerrar.
+
+`kotavel.routes` cubre el registro de los cinco verbos HTTP en API y web, nombres
+únicos de rutas y generación de URL, normalización del prefijo `/api`, grupos
+anidados, rutas duplicadas, aliases de middleware por cadena (individuales y en
+listas), aliases desconocidos/duplicados, callbacks y paths inválidos, handlers que reciben
+`RequestView`, inmutabilidad al arrancar y fallos del adaptador. Comprueba el
+orden y separación de middleware global, API, web, grupos y endpoints, la
+respuesta corta, errores convertidos a HTTP 500 y el cierre de registros después
+del arranque. También verifica valores predeterminados del listener y deep links
+inválidos, destinos desconocidos, handlers duplicados y rutas fuera de su espacio.
+La suite unitaria usa un adaptador falso; la integración del Laboratorio abre el
+listener real y valida las líneas de acceso y el middleware de ejemplo.
+
+`kotavel.http.middleware` prueba la configuración declarativa global, los
+defaults API/web, aliases por cadena, orden de ejecución y alcance por grupo,
+respuestas que cortan la cadena, validación de callbacks y aliases, excepciones
+convertidas a HTTP 500 y el sellado del Kernel al arrancar. Usa un adaptador
+falso, así que no abre sockets.

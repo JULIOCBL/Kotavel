@@ -15,14 +15,55 @@
 namespace kotavel {
 namespace {
 std::mutex metrics_output_mutex;
+
+// Al cerrar, cada proveedor libera primero los recursos que dependen de otros.
+class ProviderLifecycle final {
+public:
+    ProviderLifecycle(Container& services,
+                      std::vector<std::unique_ptr<ServiceProvider>> providers)
+        : services_(services), providers_(std::move(providers)) {}
+    ~ProviderLifecycle() { shutdown(); }
+    ProviderLifecycle(const ProviderLifecycle&) = delete;
+    ProviderLifecycle& operator=(const ProviderLifecycle&) = delete;
+
+    void register_services() {
+        for (const auto& provider : providers_) {
+            if (!provider) throw std::invalid_argument("Service provider cannot be null");
+            provider->register_services(services_);
+        }
+    }
+
+    void boot() {
+        for (const auto& provider : providers_) {
+            // Cerrar también el proveedor cuyo boot falle durante su inicialización.
+            ++boot_attempted_;
+            provider->boot(services_);
+        }
+    }
+
+    void shutdown() noexcept {
+        while (boot_attempted_ > 0) {
+            --boot_attempted_;
+            providers_[boot_attempted_]->shutdown(services_);
+        }
+    }
+
+private:
+    Container& services_;
+    std::vector<std::unique_ptr<ServiceProvider>> providers_;
+    std::size_t boot_attempted_ = 0;
+};
 }
 int run_console(int argc, char** argv, const ExecuteConsole& execute,
-                std::string_view application_help, const LoadConsoleConfig& load_config) {
-    return run_console(argc, argv, console_settings, execute, application_help, load_config);
+                std::string_view application_help, const LoadConsoleConfig& load_config,
+                const CreateServiceProviders& create_providers) {
+    return run_console(argc, argv, console_settings, execute, application_help,
+                       load_config, create_providers);
 }
 int run_console(int argc, char** argv, const ConfigureConsole& configure,
                 const ExecuteConsole& execute, std::string_view application_help,
-                const LoadConsoleConfig& load_config) {
+                const LoadConsoleConfig& load_config,
+                const CreateServiceProviders& create_providers) {
     using Clock = std::chrono::steady_clock;
     const auto run_started = Clock::now();
     bool debug = false;
@@ -65,11 +106,15 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
         // Su ámbito incluye configure, execute y cierre; nunca se propaga a otros hilos.
         phase = "load_configuration";
         const auto configuration_started = Clock::now();
-        Config settings_map = load_config ? load_config() : Config{};
+        auto settings_map = std::make_shared<Config>(load_config ? load_config() : Config{});
         startup.configuration = std::chrono::duration_cast<std::chrono::nanoseconds>(
             Clock::now() - configuration_started);
-        const ConfigScope config_scope(settings_map);
-        ConsoleContext context{std::move(root), std::move(identity), options.arguments, &settings_map};
+        Container services;
+        services.instance<Config>(settings_map);
+        services.instance<AppEnvironment>(std::make_shared<AppEnvironment>(identity));
+        const ConfigScope config_scope(*settings_map);
+        ConsoleContext context{std::move(root), std::move(identity), options.arguments,
+                               settings_map.get(), nullptr};
         phase = "configure_console";
         const auto settings_started = Clock::now();
         auto settings = configure(context);
@@ -79,15 +124,29 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
         startup.settings = std::chrono::duration_cast<std::chrono::nanoseconds>(
             Clock::now() - settings_started);
         const auto boot_started = Clock::now();
+        phase = "configure_application";
+        services.instance<Application>(std::make_shared<Application>(
+            std::move(settings.logs), std::move(settings.errors)));
+        phase = "register_services";
+        ProviderLifecycle providers(services, create_providers ? create_providers()
+            : std::vector<std::unique_ptr<ServiceProvider>>{});
+        providers.register_services();
+        services.seal();
+        Application& application = services.get<Application>();
+        // Exponer el contenedor solo después de completar todos los registros.
+        context.container = &services;
         phase = "boot_application";
-        Application application(std::move(settings.logs), std::move(settings.errors));
         application.boot();
+        // Los proveedores arrancan después de Application y antes del callback consumidor.
+        phase = "boot_services";
+        providers.boot();
         startup.application_boot = std::chrono::duration_cast<std::chrono::nanoseconds>(
             Clock::now() - boot_started);
         startup.total = std::chrono::duration_cast<std::chrono::nanoseconds>(
             Clock::now() - run_started);
 
         // El stream local permite observar métricas desde otra terminal.
+        phase = "start_metrics";
         std::optional<metrics::MetricsStream> stream;
         bool print_metrics_to_console = settings.metrics.console;
         if (settings.metrics.enabled && settings.metrics.stream) {
@@ -158,7 +217,9 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
             (application.last_error() && !application.last_error()->recoverable);
         monitor.stop();
         if (stream) stream->stop();
+        providers.shutdown();
         application.shutdown();
+        services.shutdown();
         return failed && code == 0 ? 1 : code;
     } catch (const detail::EnvironmentFileOpenError& error) {
         const auto file = error.path().filename().string();

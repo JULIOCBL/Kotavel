@@ -6,6 +6,17 @@
 #include <chrono>
 #include <stdexcept>
 #include <utility>
+
+namespace {
+class ThrowingBootProvider final : public kotavel::ServiceProvider {
+public:
+    void register_services(kotavel::Container&) override {}
+    void boot(kotavel::Container&) override {
+        throw std::invalid_argument("Route group callback cannot be empty");
+    }
+};
+}
+
 int main() {
     const auto root = std::filesystem::current_path() / "storage" /
         ("kotavel-console-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
@@ -204,6 +215,31 @@ int main() {
     if (unknown_code != 1 || !continued_after_unknown ||
         unknown_diagnostic.find("no pudo iniciar") == std::string::npos ||
         logged_unknown.find("Unknown non-standard exception") == std::string::npos)
+        return 1;
+
+    // Un error de validación en el boot de un provider (por ejemplo, rutas)
+    // debe llegar al log del proyecto aunque ocurra antes del callback principal.
+    const auto provider_root = make_root("provider-boot-exception");
+    auto provider_option = "--project-root=" + provider_root.string();
+    char* provider_args[] = {name, provider_option.data()};
+    auto create_throwing_provider = [] {
+        kotavel::ServiceProviderList providers;
+        providers.push_back(std::make_unique<ThrowingBootProvider>());
+        return providers;
+    };
+    auto execute_without_work = [](kotavel::Application&, const kotavel::ConsoleContext&) {
+        return 0;
+    };
+    auto [provider_code, provider_diagnostic] = capture_run([&] {
+        return kotavel::run_console(2, provider_args, execute_without_work, {}, {},
+                                    create_throwing_provider);
+    });
+    const auto logged_provider = read_file(provider_root / "storage" / "logs" / "kotavel.log");
+    if (provider_code != 1 ||
+        provider_diagnostic.find("Kotavel no pudo iniciar o completar") == std::string::npos ||
+        logged_provider.find("runtime.startup_failed") == std::string::npos ||
+        logged_provider.find("boot_services") == std::string::npos ||
+        logged_provider.find("Route group callback cannot be empty") == std::string::npos)
         return 1;
 
     // Un archivo donde debería ir el directorio hace fallar Logger y también

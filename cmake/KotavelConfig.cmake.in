@@ -1,5 +1,11 @@
 @PACKAGE_INIT@
 include(CMakeFindDependencyMacro)
 find_dependency(Threads)
+if(@KOTAVEL_BUILD_HTTP@)
+    find_dependency(Drogon CONFIG REQUIRED)
+endif()
+if(@KOTAVEL_BUILD_DESKTOP_QT@)
+    find_dependency(Qt6 REQUIRED COMPONENTS Gui Qml Quick)
+endif()
 include("${CMAKE_CURRENT_LIST_DIR}/KotavelTargets.cmake")
 check_required_components(Kotavel)

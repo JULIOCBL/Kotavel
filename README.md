@@ -4,11 +4,16 @@ Creado por **Julio Cesar Borges Lopez**. Distribuido bajo la [licencia MIT](LICE
 
 Framework C++23 en desarrollo. `Kotavel::Core` es una biblioteca estática con
 ciclo de vida síncrono, recuperación explícita de operaciones y diagnóstico
-a archivo y consola, con ubicación, trazas y presentación por entorno. No tiene dependencias externas ni servidor.
+a archivo y consola, con ubicación, trazas y presentación por entorno. El target
+opcional `Kotavel::Http` incorpora un adaptador Drogon; el núcleo no depende de
+él. Consulta [rutas HTTP y deep links](docs/http.md).
 
 Consulta [Configuración](docs/configuration.md) para el entorno y `Config`,
-[el uso del núcleo](docs/core.md) para registros y errores, y la
-[referencia interna de Config](docs/internals/config.md) para entender su
+[el uso del núcleo](docs/core.md) para registros y errores,
+[el contenedor de servicios](docs/container.md) para registrar dependencias,
+[rutas HTTP y deep links](docs/http.md) y su [referencia de middleware](docs/http/middleware.md).
+El [módulo desktop](docs/desktop.md) documenta rutas, ventanas y vistas QML.
+La [referencia interna de Config](docs/internals/config.md) explica su
 almacenamiento, carga, coste de operaciones y reglas de concurrencia.
 
 El [blueprint propuesto de Kotavel](docs/blueprint/README.md) define la estructura,
@@ -16,8 +21,8 @@ las etapas de implementación y los criterios de rendimiento del framework. Los 
 permiten reproducir las primeras mediciones del núcleo.
 
 ```text
-include/kotavel/   Interfaces públicas del núcleo y módulos reservados
-src/              Implementación del núcleo y módulos reservados
+include/kotavel/   Interfaces públicas del núcleo, HTTP opcional y deep links
+src/              Implementación del núcleo y módulos
 resources/messages/ Catálogos JSON de mensajes internos por módulo
 CMakeLists.txt    Target público e instalación
 conanfile.py      Resolución de dependencias y empaquetado
@@ -31,8 +36,10 @@ benchmarks/       Mediciones futuras de rendimiento
 docs/blueprint/   Diseño propuesto y decisiones pendientes
 ```
 
-Los módulos futuros conservan `.gitkeep`. Cada nueva implementación debe
-incorporarse explícitamente a su target CMake.
+HTTP, deep links, middleware HTTP y el ciclo inicial desktop ya tienen contratos.
+El adaptador Qt es opcional; la asociación de deep links y la administración
+reiniciable de servicios siguen pendientes. Cada fuente se incorpora
+explícitamente a su target CMake.
 
 Los textos internos se obtienen mediante `Messages::get()` en `src/text/messages.hpp`.
 La clave combina el nombre del catálogo con su ruta anidada, por ejemplo
@@ -92,9 +99,8 @@ su configuración a `mode: package` y `version: 0.1.0`, y ejecuta dependencias
 y compilación nuevamente. La guía `docs/framework.md` del Laboratorio explica
 la selección de origen.
 
-No existe una publicación remota configurada. Las futuras dependencias internas
-se declararán en las constantes literales `FRAMEWORK_REQUIRES` y
-`FRAMEWORK_OPTIONS` de esta receta; actualmente ambas están vacías.
+No existe una publicación remota configurada. Las dependencias obligatorias y
+opcionales del framework se declaran en las constantes literales de esta receta.
 ## Herramientas compartidas
 
 `tools/kotavel_cli/` mantiene los comandos `prepare`, `install`, `build`, `test`,
