@@ -30,7 +30,8 @@ std::string deep_link_path(std::string_view uri, std::string_view scheme) {
     const std::string prefix = std::string(scheme) + "://";
     if (!uri.starts_with(prefix)) return {};
     const auto destination = uri.substr(prefix.size());
-    if (destination.empty() || destination.find_first_of("?#") != std::string_view::npos ||
+    if (destination.empty()) return "/";
+    if (destination.find_first_of("?#") != std::string_view::npos ||
         destination.find('@') != std::string_view::npos ||
         destination.find(':') != std::string_view::npos)
         return {};
@@ -143,6 +144,12 @@ int DesktopKernel::run(int argc, char** argv, std::string_view scheme) {
     platform_argv.reserve(platform_arguments.size());
     for (auto& argument : platform_arguments) platform_argv.push_back(argument.data());
     int platform_argc = static_cast<int>(platform_argv.size());
+
+    platform_->set_deep_link_handler([this, configured_scheme = std::string(scheme)](
+                                         std::string_view uri, WindowManager& windows) {
+        DesktopContext context(routes_, windows);
+        (void)dispatch_deep_link(routes_, uri, configured_scheme, context);
+    });
 
     return platform_->run(platform_argc, platform_argv.data(), views_root_, [this, startup_route](WindowManager& windows) {
         DesktopContext context(routes_, windows);

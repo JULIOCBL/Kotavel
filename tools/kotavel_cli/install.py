@@ -250,12 +250,21 @@ def project_executable_path(build_type, name, system):
     """Resuelve ejecutables en la ubicación estándar o en app/ del consumidor."""
     filename = name + '.exe' if system == 'Windows' else name
     build = ROOT / 'build' / build_type
+    if system == 'Darwin':
+        bundle = build / 'app' / (name + '.app')
+        if bundle.is_dir():
+            return bundle
     candidates = (build / 'app' / filename, build / filename)
     return next((path for path in candidates if path.is_file()), candidates[0])
 
 
 def run_application(executable, environment, deep_link, env):
     """Ejecuta el consumidor con el entorno elegido y, opcionalmente, una URI desktop."""
+    executable = Path(executable)
+    if platform.system() == 'Darwin' and executable.suffix == '.app':
+        # Ejecutar el binario del bundle desde el CLI evita depender de que
+        # Launch Services permita abrirlo en entornos administrados.
+        executable = executable / 'Contents' / 'MacOS' / executable.stem
     command = [executable, '--env=' + environment, '--project-root=' + str(ROOT)]
     if deep_link:
         # DesktopKernel valida el esquema configurado y resuelve la ruta registrada.
@@ -326,8 +335,8 @@ def main(argv=None):
     parser.add_argument('--shell', action='store_true', help='Entra en una terminal con las herramientas activas')
     parser.add_argument('--configure-only', action='store_true', help='Reutiliza las herramientas existentes sin descargar nada')
     args = parser.parse_args(argv)
-    if args.env and not args.run:
-        parser.error('--env solo se utiliza con run')
+    if args.env and not (args.run or args.build):
+        parser.error('--env solo se utiliza con run y build')
     if args.deep_link and not args.run:
         parser.error('--deep-link solo se utiliza con run')
     if args.framework and (not args.test or args.build or args.run or args.shell):
@@ -404,7 +413,7 @@ def main(argv=None):
         if args.run:
             name = project_executable(build_type)
             executable = project_executable_path(build_type, name, system)
-            if not executable.is_file():
+            if not executable.exists():
                 raise RuntimeError(f'No se encontró el ejecutable generado: {executable}')
             run_application(executable, environment, args.deep_link, env)
     if args.test and not args.build and not args.run:

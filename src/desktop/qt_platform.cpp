@@ -1,6 +1,8 @@
 #include <kotavel/desktop/qt_platform.hpp>
 
 #include <QColor>
+#include <QEvent>
+#include <QFileOpenEvent>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QImage>
@@ -33,6 +35,35 @@ QString to_qstring(const std::filesystem::path& path) {
     return QString::fromUtf8(reinterpret_cast<const char*>(utf8.data()),
                              static_cast<qsizetype>(utf8.size()));
 }
+
+class KotavelGuiApplication final : public QGuiApplication {
+public:
+    KotavelGuiApplication(int& argc, char** argv,
+                          DesktopPlatform::DeepLinkCallback deep_link_handler)
+        : QGuiApplication(argc, argv), deep_link_handler_(std::move(deep_link_handler)) {}
+
+    void set_window_manager(WindowManager& windows) noexcept { windows_ = &windows; }
+
+protected:
+    bool event(QEvent* event) override {
+        if (event->type() == QEvent::FileOpen && windows_ && deep_link_handler_) {
+            const auto* open_event = static_cast<QFileOpenEvent*>(event);
+            const auto url = open_event->url();
+            if (url.isValid() && !url.scheme().isEmpty()) {
+                const auto uri = url.toString(QUrl::FullyEncoded).toUtf8();
+                deep_link_handler_(std::string_view(uri.constData(),
+                                                    static_cast<std::size_t>(uri.size())),
+                                   *windows_);
+                return true;
+            }
+        }
+        return QGuiApplication::event(event);
+    }
+
+private:
+    DesktopPlatform::DeepLinkCallback deep_link_handler_;
+    WindowManager* windows_ = nullptr;
+};
 
 QIcon default_app_icon() {
     initialize_kotavel_branding_resources();
@@ -128,17 +159,33 @@ private:
 
 class QtDesktopPlatform final : public DesktopPlatform {
 public:
+    void set_deep_link_handler(DeepLinkCallback handler) override {
+        deep_link_handler_ = std::move(handler);
+    }
+
     int run(int argc, char** argv, const std::filesystem::path& views_root,
             const StartCallback& start) override {
-        QGuiApplication application(argc, argv);
+        KotavelGuiApplication application(argc, argv, std::move(deep_link_handler_));
         const auto icon = default_app_icon();
         application.setWindowIcon(icon);
-        QtWindowManager windows(views_root, icon);
+        auto resolved_views = views_root;
+        if (!std::filesystem::is_directory(resolved_views)) {
+            const auto app_resources = std::filesystem::path(
+                application.applicationDirPath().toStdString()) / ".." / "Resources";
+            const auto bundled_views = app_resources / "resources" / "views";
+            if (std::filesystem::is_directory(bundled_views))
+                resolved_views = std::filesystem::weakly_canonical(bundled_views);
+        }
+        QtWindowManager windows(resolved_views, icon);
+        application.set_window_manager(windows);
         start(windows);
         if (!windows.has_visible_window())
             throw std::logic_error("Desktop startup route did not open a window");
         return application.exec();
     }
+
+private:
+    DeepLinkCallback deep_link_handler_;
 };
 }
 

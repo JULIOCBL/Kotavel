@@ -10,6 +10,7 @@ struct ConsoleArguments {
     std::string environment = "production";
     std::filesystem::path root;
     std::vector<std::string_view> arguments;
+    bool environment_explicit = false;
     bool help = false;
     bool debug = false;
 };

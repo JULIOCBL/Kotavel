@@ -79,7 +79,11 @@ private:
 class DesktopPlatform {
 public:
     using StartCallback = std::function<void(WindowManager&)>;
+    using DeepLinkCallback = std::function<void(std::string_view, WindowManager&)>;
     virtual ~DesktopPlatform() = default;
+    // Las plataformas que admiten enlaces mientras la aplicación ya corre pueden
+    // conservar este callback hasta que inicie el loop gráfico.
+    virtual void set_deep_link_handler(DeepLinkCallback) {}
     // La plataforma crea su loop gráfico y sus ventanas antes de ejecutar el arranque.
     virtual int run(int argc, char** argv, const std::filesystem::path& views_root,
                     const StartCallback& start) = 0;

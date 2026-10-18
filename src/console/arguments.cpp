@@ -10,7 +10,10 @@ ConsoleArguments parse_console_arguments(int argc, char** argv) {
         const std::string_view argument(argv[i]);
         if (argument == "--help" || argument == "-h") options.help = true;
         else if (argument == "--development") options.debug = true;
-        else if (argument.starts_with("--env=")) options.environment = argument.substr(6);
+        else if (argument.starts_with("--env=")) {
+            options.environment = argument.substr(6);
+            options.environment_explicit = true;
+        }
         else if (argument.starts_with("--project-root=")) {
             if (argument.size() == 15) throw std::invalid_argument("Empty project root");
             options.root = argument.substr(15);

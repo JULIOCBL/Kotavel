@@ -9,15 +9,67 @@
 #include <kotavel/diagnostics/bootstrap_logger.hpp>
 
 #include <array>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <mutex>
+#include <optional>
 #include <sstream>
 #include <utility>
 
 namespace kotavel {
 namespace {
 std::mutex metrics_output_mutex;
+
+struct InstalledBundle final {
+    std::filesystem::path resources;
+    std::filesystem::path data;
+    std::string environment = "production";
+};
+
+std::optional<InstalledBundle> installed_bundle(const char* executable) {
+    if (!executable || !*executable) return std::nullopt;
+    auto binary = std::filesystem::path(executable);
+    if (binary.is_relative()) binary = std::filesystem::absolute(binary);
+    const auto macos = binary.parent_path();
+    const auto contents = macos.parent_path();
+    const auto bundle = contents.parent_path();
+    if (macos.filename() != "MacOS" || contents.filename() != "Contents" ||
+        bundle.extension() != ".app")
+        return std::nullopt;
+
+    const auto resources = contents / "Resources";
+    if (!std::filesystem::is_directory(resources) ||
+        !std::filesystem::is_regular_file(resources / "kotavel-environment"))
+        return std::nullopt;
+
+    std::string environment = "production";
+    std::ifstream selection(resources / "kotavel-environment", std::ios::binary);
+    if (selection) {
+        std::getline(selection, environment);
+        while (!environment.empty() && (environment.back() == '\r' || environment.back() == ' ' || environment.back() == '\t'))
+            environment.pop_back();
+        const auto first = environment.find_first_not_of(" \t");
+        if (first != std::string::npos) environment.erase(0, first);
+        if (environment != "production" && environment != "local" && environment != "development")
+            throw std::runtime_error("Application bundle has an invalid kotavel-environment value");
+    }
+
+    const char* home = std::getenv("HOME");
+    if (!home || !*home) throw std::runtime_error("HOME is unavailable for the application data directory");
+    const auto data = std::filesystem::path(home) / "Library" / "Application Support" / bundle.stem();
+    std::filesystem::create_directories(data);
+    const auto filename = environment == "production" ? ".env" : ".env." + environment;
+    const auto bundled_environment = resources / filename;
+    if (!std::filesystem::is_regular_file(bundled_environment))
+        throw std::runtime_error("Application bundle is missing " + filename);
+    const auto user_environment = data / filename;
+    if (!std::filesystem::exists(user_environment))
+        std::filesystem::copy_file(bundled_environment, user_environment);
+    return InstalledBundle{resources, data, std::move(environment)};
+}
 
 // Al cerrar, cada proveedor libera primero los recursos que dependen de otros.
 class ProviderLifecycle final {
@@ -85,8 +137,13 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
             if (!application_help.empty()) std::cout << application_help << '\n';
             return 0;
         }
+        std::optional<InstalledBundle> bundle;
+        if (options.root.empty()) bundle = installed_bundle(argv[0]);
+        if (!options.environment_explicit && bundle)
+            options.environment = bundle->environment;
         auto root = std::move(options.root);
-        if (root.empty()) root = std::filesystem::current_path();
+        if (root.empty())
+            root = bundle ? bundle->data : std::filesystem::current_path();
         project_root = root;
         root = std::filesystem::canonical(root);
         if (!std::filesystem::is_directory(root)) throw std::invalid_argument("Project root must be a directory");

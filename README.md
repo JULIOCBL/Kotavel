@@ -115,7 +115,7 @@ opcionales del framework se declaran en las constantes literales de esta receta.
 ## Herramientas compartidas
 
 `tools/kotavel_cli/` mantiene los comandos `prepare`, `install`, `build`, `test`,
-`run` y `shell`, los preparadores por sistema y los perfiles predeterminados.
+`run`, `package` y `shell`, los preparadores por sistema y los perfiles predeterminados.
 Cada consumidor conserva su entrada `kotavel.py`, configuración, perfiles,
 receta y lockfile. Las herramientas reciben explícitamente la raíz del proyecto.
 `APP_NAME` en el archivo de entorno seleccionado identifica la aplicación;
@@ -133,6 +133,28 @@ python3 -m pip install .
 publicación en un índice Python ni generador de proyectos nuevos todavía.
 Los perfiles propios del consumidor tienen prioridad sobre los predeterminados
 incluidos en las herramientas.
+
+En macOS, `package` compila el proyecto con el archivo de entorno seleccionado y
+genera los formatos solicitados. Por defecto usa `.env` y genera los tres
+artefactos dentro de `dist/`:
+
+```sh
+python3 kotavel.py package
+python3 kotavel.py package --env-file .env.development --format pkg
+python3 kotavel.py package --format dmg --output build/distribution
+```
+
+`--env-file` admite `.env`, `.env.local` y `.env.development`; por omisión,
+`.env` corresponde al entorno `production`. `--format` acepta `app`, `dmg`,
+`pkg` o `all`. El `.app` lo crea CMake y el comando lo copia al directorio de
+salida; `.dmg` es la imagen de arrastre y `.pkg` es el instalador de macOS. La
+generación incluye las vistas del consumidor, las bibliotecas y módulos Qt
+necesarios y la configuración seleccionada. Al primer arranque, Kotavel copia
+el archivo de entorno a `~/Library/Application Support/<Aplicación>` para que
+los registros y los datos de ejecución tengan una ubicación escribible.
+Requiere las herramientas nativas de macOS `hdiutil`, `productbuild`,
+`codesign` y `macdeployqt`. Cada ejecución empaqueta únicamente el `.app`
+generado por el proyecto seleccionado.
 
 Para ejecutar las pruebas de estas herramientas desde Kotavel:
 

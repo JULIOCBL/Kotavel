@@ -127,11 +127,19 @@ void test_routes_and_duplicate_validation() {
 
 void test_deep_link_translation_and_context_lifetime() {
     kotavel::desktop::DesktopRouter routes;
+    routes.get("/", [](auto& context) {
+        context.show("main", {}, kotavel::desktop::view("desktop.home"));
+    });
     routes.get("/pos/home", [](auto& context) {
         context.show("main", {}, kotavel::desktop::view("desktop.pos.home"));
     });
     FakeWindows windows;
     kotavel::desktop::DesktopContext context(routes, windows);
+    check(kotavel::desktop::dispatch_deep_link(routes, "kotavel://", "kotavel", context) ==
+              kotavel::desktop::DispatchResult::dispatched,
+          "the bare scheme should dispatch the desktop home route");
+    check(windows.views["main"] == "desktop.home",
+          "the bare scheme should show the main view");
     check(kotavel::desktop::dispatch_deep_link(routes, "kotavel://pos/home", "kotavel", context) ==
               kotavel::desktop::DispatchResult::dispatched,
           "deep links should translate their host and path to desktop routes");
@@ -140,7 +148,7 @@ void test_deep_link_translation_and_context_lifetime() {
               kotavel::desktop::DispatchResult::invalid_path,
           "deep links with another scheme should be rejected");
     // Rechazar estructuras ambiguas evita que URI externas salten las rutas registradas.
-    for (const auto uri : {"kotavel://", "kotavel:///pos/home",
+    for (const auto uri : {"kotavel:///pos/home",
                            "kotavel://pos/home?next=/admin",
                            "kotavel://pos/home#fragment", "kotavel://user@pos/home",
                            "kotavel://pos:8080/home", "Kotavel://pos/home",

@@ -27,6 +27,7 @@ class CommandHelpParser(argparse.ArgumentParser):
             ('build', 'Instala dependencias, compila y prueba.'),
             ('test', 'Ejecuta las pruebas sin recompilar.'),
             ('run', 'Compila, prueba y ejecuta la aplicación.'),
+            ('package', 'Compila y genera .app, .dmg o .pkg en macOS.'),
             ('monitor', 'Muestra métricas de una aplicación en ejecución.'),
             ('shell', 'Abre la terminal con las herramientas activas.'),
         ]:
@@ -38,6 +39,8 @@ class CommandHelpParser(argparse.ArgumentParser):
             ('run --env=development', 'Carga .env.development y ejecuta.'),
             ('run --env=production', 'Carga .env (opción predeterminada).'),
             ('run --deep-link URI', 'Abre una ruta desktop desde su URI.'),
+            ('package --env-file .env', 'Empaqueta la configuración .env (opción predeterminada).'),
+            ('package --format all', 'Genera .app, .dmg y .pkg.'),
             ('install --offline', 'Usa solo la caché local.'),
             ('test --framework', 'Comprueba Python, núcleo e integración local.'),
             ('monitor --pid PID', 'Selecciona una instancia concreta.'),
@@ -69,6 +72,7 @@ def main(argv=None):
         'build': 'Instala dependencias, compila el proyecto y ejecuta sus pruebas.',
         'test': 'Ejecuta las pruebas del proyecto; --framework comprueba Python, núcleo e integración local.',
         'run': 'Compila, prueba y ejecuta la aplicación.',
+        'package': 'Compila la aplicación y genera sus entregables macOS (.app, .dmg y .pkg).',
         'monitor': 'Muestra CPU y RAM de una aplicación Kotavel activa.',
         'shell': 'Abre una terminal con las herramientas del proyecto activas.',
     }
@@ -81,6 +85,9 @@ def main(argv=None):
         if args.command == 'monitor':
             from . import monitor
             return monitor.main([*remaining, '--project', str(root)])
+        if args.command == 'package':
+            from . import package
+            return package.main([*remaining, '--project', str(root)])
         if args.command == 'install':
             from . import deps
             deps.main([*remaining, '--project', str(root)])
