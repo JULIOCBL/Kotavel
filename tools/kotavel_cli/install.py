@@ -234,12 +234,33 @@ def enter_shell(prepared, env):
     run(prepared['shell'], env)
 
 
-def project_executable():
-    config = json.loads((ROOT / 'kotavel.json').read_text(encoding='utf-8-sig'))
-    name = config.get('executable', ROOT.name)
-    if not isinstance(name, str) or not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]*', name):
-        raise RuntimeError('kotavel.json: executable debe ser un nombre de ejecutable, sin rutas.')
+def project_executable(build_type):
+    """Lee el nombre que CMake resolvió desde la configuración del entorno."""
+    manifest = ROOT / 'build' / build_type / 'kotavel-app-name.txt'
+    if not manifest.is_file():
+        raise RuntimeError(f'No se encontró el nombre de aplicación generado: {manifest}')
+    name = manifest.read_text(encoding='utf-8').strip()
+    if (not isinstance(name, str) or
+            not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_. -]*', name) or name.endswith(' ')):
+        raise RuntimeError(f'{manifest}: APP_NAME debe ser un nombre de ejecutable, sin rutas.')
     return name
+
+
+def project_executable_path(build_type, name, system):
+    """Resuelve ejecutables en la ubicación estándar o en app/ del consumidor."""
+    filename = name + '.exe' if system == 'Windows' else name
+    build = ROOT / 'build' / build_type
+    candidates = (build / 'app' / filename, build / filename)
+    return next((path for path in candidates if path.is_file()), candidates[0])
+
+
+def run_application(executable, environment, deep_link, env):
+    """Ejecuta el consumidor con el entorno elegido y, opcionalmente, una URI desktop."""
+    command = [executable, '--env=' + environment, '--project-root=' + str(ROOT)]
+    if deep_link:
+        # DesktopKernel valida el esquema configurado y resuelve la ruta registrada.
+        command.append(deep_link)
+    run(command, env)
 
 
 def profile_label(path):
@@ -264,12 +285,18 @@ def test_framework(framework_source, build_type, config, python, env):
         print(f'[{index}/4] Pruebas Python: {suite}', flush=True)
         run([python, '-m', 'unittest', 'discover', '-s', suite, '-p', 'test_*.py'], env)
 
+    # Las dependencias del consumidor incluyen las del framework local. Resuélvelas
+    # antes de configurar el núcleo para que CMake encuentre sus paquetes CMake.
+    run(['conan', 'install', '.', '--build=missing'], env)
+
     print('[3/4] Compilación y pruebas del núcleo de Kotavel', flush=True)
     destination = ROOT / 'build' / 'framework-tests' / build_type
+    generators = ROOT / 'build' / build_type / 'generators'
     compilers = json.loads(config['conf']['tools.build:compiler_executables'])
     run(['cmake', '-S', framework_source, '-B', destination,
          '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=' + build_type,
          '-DCMAKE_CXX_COMPILER=' + compilers['cpp'],
+         '-DCMAKE_PREFIX_PATH=' + str(generators),
          '-DKOTAVEL_BUILD_TESTS=ON', '-DPython3_EXECUTABLE=' + str(python)], env)
     run(['cmake', '--build', destination, '--config', build_type], env)
     run(['ctest', '--test-dir', destination, '-C', build_type,
@@ -277,8 +304,7 @@ def test_framework(framework_source, build_type, config, python, env):
 
     print('[4/4] Compilación y pruebas de integración del consumidor', flush=True)
     preset = 'conan-' + build_type.lower()
-    for command in (['conan', 'install', '.', '--build=missing'],
-                    ['cmake', '--preset', preset, '-DBUILD_TESTING=ON'],
+    for command in (['cmake', '--preset', preset, '-DBUILD_TESTING=ON'],
                     ['cmake', '--build', '--preset', preset],
                     ['ctest', '--preset', preset, '--output-on-failure', '--no-tests=error']):
         run(command, env)
@@ -295,12 +321,15 @@ def main(argv=None):
     parser.add_argument('--build-type', choices=('Debug', 'Release'))
     parser.add_argument('--build', action='store_true')
     parser.add_argument('--env', choices=('local', 'development', 'production'), help='Archivo de entorno al ejecutar run')
+    parser.add_argument('--deep-link', help='Abre una ruta desktop desde una URI, por ejemplo kotavel://pos/home')
     parser.add_argument('--run', action='store_true', help='Compila, prueba y ejecuta el consumidor')
     parser.add_argument('--shell', action='store_true', help='Entra en una terminal con las herramientas activas')
     parser.add_argument('--configure-only', action='store_true', help='Reutiliza las herramientas existentes sin descargar nada')
     args = parser.parse_args(argv)
     if args.env and not args.run:
         parser.error('--env solo se utiliza con run')
+    if args.deep_link and not args.run:
+        parser.error('--deep-link solo se utiliza con run')
     if args.framework and (not args.test or args.build or args.run or args.shell):
         parser.error('--framework solo se utiliza con el comando test')
     if args.project is not None:
@@ -366,14 +395,18 @@ def main(argv=None):
         print('Después: conan install . --build=missing', flush=True)
     if args.build or args.run:
         preset = 'conan-' + build_type.lower()
-        for command in ([ 'conan', 'install', '.', '--build=missing'], ['cmake', '--preset', preset], ['cmake', '--build', '--preset', preset], ['ctest', '--preset', preset, '--output-on-failure']):
+        environment = args.env or 'production'
+        for command in ([ 'conan', 'install', '.', '--build=missing'],
+                        ['cmake', '--preset', preset, '-DKOTAVEL_APP_ENV=' + environment],
+                        ['cmake', '--build', '--preset', preset],
+                        ['ctest', '--preset', preset, '--output-on-failure']):
             run(command, env)
         if args.run:
-            name = project_executable()
-            executable = ROOT / 'build' / build_type / (name + '.exe' if system == 'Windows' else name)
+            name = project_executable(build_type)
+            executable = project_executable_path(build_type, name, system)
             if not executable.is_file():
                 raise RuntimeError(f'No se encontró el ejecutable generado: {executable}')
-            run([executable, '--env=' + (args.env or 'production'), '--project-root=' + str(ROOT)], env)
+            run_application(executable, environment, args.deep_link, env)
     if args.test and not args.build and not args.run:
         if framework_source is not None:
             test_framework(framework_source, build_type, config, python, env)

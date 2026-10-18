@@ -38,7 +38,9 @@ que permite sustituir Qt por otro adaptador.
 
 `QtDesktopPlatform` crea una sola `QGuiApplication` en el hilo principal, prepara
 las rutas y ejecuta el loop de eventos. El host conserva las ventanas por id y
-carga las vistas QML desde el directorio indicado por `DESKTOP_VIEWS`.
+carga las vistas QML desde el directorio indicado por `DESKTOP_VIEWS`. El icono
+predeterminado de la app y sus ventanas usa el símbolo original de
+`assets/branding/kotavel-mark.png`, recortado sobre una placa oscura redondeada.
 
 ## HTTP y escritorio juntos
 

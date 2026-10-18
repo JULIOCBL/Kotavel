@@ -227,7 +227,9 @@ void test_short_circuit_and_exception_boundary() {
     const auto failed = kernel.handle(kernel.routes().routes()[1],
         {kotavel::http::Method::get, "/api/failure", {}});
     check(failed.status == 500 &&
-          failed.body == R"({"error":"internal_server_error"})" && handler_calls == 0,
+          failed.body ==
+          R"({"errors":[{"detail":"An unexpected error occurred while processing the request.","status":"500","title":"Internal Server Error"}]})" &&
+          handler_calls == 0,
           "middleware exceptions should become generic HTTP 500 responses");
 }
 
@@ -240,7 +242,7 @@ void test_unhandled_exception_reporter() {
                                       const kotavel::http::RequestView& request,
                                       std::exception_ptr failure) {
         ++reports;
-        check(route.path == "/api/failure" && request.path == "/api/failure",
+        check(route.path == "/api/failure" && request.path() == "/api/failure",
               "exception reports should identify the route and request");
         try {
             std::rethrow_exception(failure);
@@ -256,7 +258,8 @@ void test_unhandled_exception_reporter() {
     const auto failed = kernel.handle(kernel.routes().routes().front(),
         {kotavel::http::Method::get, "/api/failure", {}});
     check(reports == 1 && failed.status == 500 &&
-          failed.body == R"({"error":"internal_server_error"})",
+          failed.body ==
+          R"({"errors":[{"detail":"An unexpected error occurred while processing the request.","status":"500","title":"Internal Server Error"}]})",
           "the reporter should receive one exception without exposing it to the client");
 
     kotavel::http::HttpKernel reporter_failure(std::make_unique<FakeServer>(

@@ -5,7 +5,7 @@ import os
 
 # La receta es la fuente de las dependencias del framework en ambos modos.
 # Mantén estas constantes literales: el consumidor local las lee sin ejecutar la receta.
-FRAMEWORK_REQUIRES = ()
+FRAMEWORK_REQUIRES = ("rapidjson/1.1.0",)
 FRAMEWORK_OPTIONAL_REQUIRES = {
     "http": ("drogon/1.9.13",),
     "desktop": ("qt/6.11.1",),
@@ -98,9 +98,15 @@ class KotavelConan(ConanFile):
     def package_info(self):
         # CMakeDeps expone el mismo target público que la compilación desde carpeta.
         self.cpp_info.set_property("cmake_file_name", "Kotavel")
+        # RapidJSON compila el backend privado, pero no forma parte de la API instalada.
+        self.cpp_info.ignored_requires = ["rapidjson"]
         core = self.cpp_info.components["core"]
         core.set_property("cmake_target_name", "Kotavel::Core")
         core.libs = ["kotavel_core"]
+        contract = self.cpp_info.components["http_contract"]
+        contract.set_property("cmake_target_name", "Kotavel::HttpContract")
+        contract.libs = ["kotavel_http_contract"]
+        contract.requires = ["core"]
         desktop = self.cpp_info.components["desktop"]
         desktop.set_property("cmake_target_name", "Kotavel::Desktop")
         desktop.libs = ["kotavel_desktop"]
@@ -110,11 +116,6 @@ class KotavelConan(ConanFile):
             desktop_qt.libs = ["kotavel_desktop_qt"]
             desktop_qt.requires = ["desktop", "qt::qtQuick", "qt::qtQml", "qt::qtGui"]
         if self.options.with_http:
-            contract = self.cpp_info.components["http_contract"]
-            contract.set_property("cmake_target_name", "Kotavel::HttpContract")
-            contract.libs = ["kotavel_http_contract"]
-            contract.requires = ["core"]
-
             adapter = self.cpp_info.components["http_drogon"]
             adapter.set_property("cmake_target_name", "Kotavel::HttpDrogon")
             adapter.libs = ["kotavel_http_drogon"]

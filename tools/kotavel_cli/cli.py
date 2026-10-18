@@ -37,6 +37,7 @@ class CommandHelpParser(argparse.ArgumentParser):
             ('run --env=local', 'Carga .env.local y ejecuta la aplicación.'),
             ('run --env=development', 'Carga .env.development y ejecuta.'),
             ('run --env=production', 'Carga .env (opción predeterminada).'),
+            ('run --deep-link URI', 'Abre una ruta desktop desde su URI.'),
             ('install --offline', 'Usa solo la caché local.'),
             ('test --framework', 'Comprueba Python, núcleo e integración local.'),
             ('monitor --pid PID', 'Selecciona una instancia concreta.'),

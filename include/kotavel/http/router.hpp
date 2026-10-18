@@ -1,24 +1,16 @@
 #pragma once
 
-#include <functional>
 #include <cstddef>
+#include <functional>
 #include <initializer_list>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
+#include <kotavel/http/request.hpp>
+
 namespace kotavel::http {
-
-enum class Method { get, post, put, patch, delete_ };
-enum class RouteKind { api, web };
-
-// Las vistas solo viven durante la llamada síncrona al handler HTTP.
-struct RequestView {
-    Method method;
-    std::string_view path;
-    std::string_view body;
-};
 
 struct Response {
     int status = 200;
@@ -26,9 +18,9 @@ struct Response {
     std::string body;
 };
 
-using Handler = std::function<Response(const RequestView&)>;
+using Handler = std::function<Response(const Request&)>;
 using Next = std::function<Response()>;
-using Middleware = std::function<Response(const RequestView&, const Next&)>;
+using Middleware = std::function<Response(const Request&, const Next&)>;
 
 struct RouteDefinition final {
     Method method;
@@ -76,6 +68,9 @@ private:
 };
 
 // DSL con nombres cercanos a Laravel y contexto explícito para evitar estado global.
+template <typename ControllerType>
+class ControllerRoutes;
+
 class Route final {
 public:
     using Group = std::function<void(Route&)>;
@@ -101,6 +96,9 @@ public:
 
     // Agrupa rutas bajo un prefijo, como Route::prefix(...)->group(...) en Laravel.
     [[nodiscard]] Route prefix(std::string_view prefix) const;
+    // Enlaza las siguientes acciones de esta ruta a una instancia de controlador.
+    template <typename ControllerType>
+    [[nodiscard]] ControllerRoutes<ControllerType> controller(ControllerType& instance) const;
     void group(const Group& routes) const;
 
 private:

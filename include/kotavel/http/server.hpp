@@ -1,6 +1,6 @@
 #pragma once
 
-#include <kotavel/http/router.hpp>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -10,6 +10,8 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+
+#include <kotavel/http/router.hpp>
 
 namespace kotavel::http {
 
@@ -24,7 +26,7 @@ struct ServerSettings {
 
 using ServerStartedCallback = std::function<void()>;
 // Permite integrar excepciones de solicitudes con el logger del consumidor.
-using ExceptionReporter = std::function<void(const RouteDefinition&, const RequestView&,
+using ExceptionReporter = std::function<void(const RouteDefinition&, const Request&,
                                              std::exception_ptr)>;
 
 // Contrato del transporte; una implementación puede sustituirse sin tocar rutas.
@@ -72,7 +74,15 @@ public:
     // El consumidor conecta el reporte antes de run(); el callback puede ejecutarse en varios hilos.
     void set_exception_reporter(ExceptionReporter reporter);
     [[nodiscard]] Response handle(const RouteDefinition& route,
-                                  const RequestView& request) const;
+                                  const Request& request) const;
+    // Las solicitudes sin ruta registrada también generan una respuesta 404.
+    [[nodiscard]] Response not_found(const Request& request) const;
+    // Las rutas registradas con otro verbo generan 405 (403 para OPTIONS).
+    [[nodiscard]] Response method_not_allowed(const Request& request) const;
+    // El adaptador llama esto al enviar cada respuesta, incluidas las automáticas.
+    void log_access(const Request& request, int status,
+                    std::chrono::system_clock::time_point received_at,
+                    std::chrono::steady_clock::duration elapsed) const noexcept;
     void run(const ServerSettings& settings = {},
              const ServerStartedCallback& started = {});
     void stop() noexcept;

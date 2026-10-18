@@ -1,6 +1,7 @@
 #pragma once
-#include <kotavel/config/config_map.hpp>
 #include <span>
+
+#include <kotavel/config/config_map.hpp>
 
 namespace kotavel {
 struct ConfigFile {

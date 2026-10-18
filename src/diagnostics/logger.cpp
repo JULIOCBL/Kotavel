@@ -1,6 +1,8 @@
 #include <kotavel/diagnostics/logger.hpp>
+
 #include "directory_lease.hpp"
 #include "log_formatter.hpp"
+
 #include <algorithm>
 #include <cstdio>
 #include <fstream>

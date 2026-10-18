@@ -24,6 +24,7 @@ permiten reproducir las primeras mediciones del núcleo.
 include/kotavel/   Interfaces públicas del núcleo, HTTP opcional y deep links
 src/              Implementación del núcleo y módulos
 resources/messages/ Catálogos JSON de mensajes internos por módulo
+assets/branding/  Logotipo, símbolo e icono predeterminados de Kotavel
 CMakeLists.txt    Target público e instalación
 conanfile.py      Resolución de dependencias y empaquetado
 tools/kotavel_cli/ Herramientas Python compartidas
@@ -35,6 +36,16 @@ examples/         Ejemplos futuros de consumo
 benchmarks/       Mediciones futuras de rendimiento
 docs/blueprint/   Diseño propuesto y decisiones pendientes
 ```
+
+## Identidad visual
+
+Los recursos predeterminados de marca están en `assets/branding/`:
+
+- `kotavel-logo.png`: logotipo completo con el nombre Kotavel.
+- `kotavel-mark.png`: símbolo geométrico de Kotavel.
+- `kotavel-icon.png`: símbolo con llave ajustable.
+
+Las imágenes se conservaron tal como fueron proporcionadas, incluidos sus fondos.
 
 HTTP, deep links, middleware HTTP y el ciclo inicial desktop ya tienen contratos.
 El adaptador Qt es opcional; la asociación de deep links y la administración
@@ -106,8 +117,9 @@ opcionales del framework se declaran en las constantes literales de esta receta.
 `tools/kotavel_cli/` mantiene los comandos `prepare`, `install`, `build`, `test`,
 `run` y `shell`, los preparadores por sistema y los perfiles predeterminados.
 Cada consumidor conserva su entrada `kotavel.py`, configuración, perfiles,
-receta y lockfile. Las herramientas reciben explícitamente la raíz del proyecto;
-`executable` en `kotavel.json` identifica el programa que deben ejecutar.
+receta y lockfile. Las herramientas reciben explícitamente la raíz del proyecto.
+`APP_NAME` en el archivo de entorno seleccionado identifica la aplicación;
+si falta, el framework usa `Kotavel`.
 
 En modo local, la entrada carga las herramientas desde este repositorio.
 En modo paquete necesita `kotavel-tools` instalado en el Python del consumidor.

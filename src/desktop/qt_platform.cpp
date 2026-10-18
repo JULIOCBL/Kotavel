@@ -1,14 +1,26 @@
 #include <kotavel/desktop/qt_platform.hpp>
 
+#include <QColor>
 #include <QGuiApplication>
+#include <QIcon>
+#include <QImage>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPixmap>
+#include <QQmlError>
 #include <QQuickView>
+#include <QRectF>
+#include <QResource>
 #include <QStringList>
 #include <QUrl>
-#include <QQmlError>
 
 #include <map>
 #include <stdexcept>
 #include <utility>
+
+static void initialize_kotavel_branding_resources() {
+    Q_INIT_RESOURCE(kotavel_branding);
+}
 
 namespace kotavel::desktop {
 namespace {
@@ -22,10 +34,29 @@ QString to_qstring(const std::filesystem::path& path) {
                              static_cast<qsizetype>(utf8.size()));
 }
 
+QIcon default_app_icon() {
+    initialize_kotavel_branding_resources();
+    const QImage source{QStringLiteral(":/kotavel/branding/kotavel-mark.png")};
+    if (source.isNull()) return {};
+
+    // Conservar el símbolo y sus destellos completos en el icono.
+    const QImage mark = source.copy(QRect(448, 180, 640, 640));
+    QPixmap tile(256, 256);
+    tile.fill(Qt::transparent);
+    QPainter painter(&tile);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
+    QPainterPath shape;
+    shape.addRoundedRect(QRectF(0, 0, 256, 256), 52, 52);
+    painter.fillPath(shape, QColor(QStringLiteral("#171a21")));
+    painter.drawImage(QRect(16, 16, 224, 224), mark);
+    return QIcon(tile);
+}
+
 class QtWindowManager final : public WindowManager {
 public:
-    explicit QtWindowManager(std::filesystem::path views_root)
-        : views_root_(std::move(views_root)) {}
+    QtWindowManager(std::filesystem::path views_root, QIcon icon)
+        : views_root_(std::move(views_root)), icon_(std::move(icon)) {}
 
     void show(std::string_view id, const WindowSettings& settings,
               const View& view) override {
@@ -35,8 +66,11 @@ public:
 
         auto& window = windows_[std::string(id)];
         if (!window) window = std::make_unique<QQuickView>();
+        QGuiApplication::setApplicationName(to_qstring(std::string_view(settings.title)));
+        QGuiApplication::setApplicationDisplayName(to_qstring(std::string_view(settings.title)));
         // std::string puede convertirse tanto a string_view como a filesystem::path.
         window->setTitle(to_qstring(std::string_view(settings.title)));
+        window->setIcon(icon_);
         window->resize(settings.width, settings.height);
         window->setResizeMode(QQuickView::SizeRootObjectToView);
         // view_path ya valida la raíz y devuelve una URL local de Qt.
@@ -79,15 +113,16 @@ private:
         return true;
     }
 
-    [[nodiscard]] QUrl view_path(const View& view) const {
+    [[nodiscard]] QUrl view_path(const View& definition) const {
         // Revalidar aquí evita que una View construida directamente escape views_root_.
-        std::string relative = kotavel::desktop::view(view.name).name;
+        std::string relative = view(definition.name).name;
         for (auto& ch : relative) if (ch == '.') ch = '/';
         auto path = views_root_ / (relative + ".qml");
         return QUrl::fromLocalFile(to_qstring(path.lexically_normal()));
     }
 
     std::filesystem::path views_root_;
+    QIcon icon_;
     std::map<std::string, std::unique_ptr<QQuickView>, std::less<>> windows_;
 };
 
@@ -96,7 +131,9 @@ public:
     int run(int argc, char** argv, const std::filesystem::path& views_root,
             const StartCallback& start) override {
         QGuiApplication application(argc, argv);
-        QtWindowManager windows(views_root);
+        const auto icon = default_app_icon();
+        application.setWindowIcon(icon);
+        QtWindowManager windows(views_root, icon);
         start(windows);
         if (!windows.has_visible_window())
             throw std::logic_error("Desktop startup route did not open a window");

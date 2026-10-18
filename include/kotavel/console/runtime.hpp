@@ -1,11 +1,12 @@
 #pragma once
-#include <kotavel/foundation/application.hpp>
-#include <kotavel/container/container.hpp>
-#include <kotavel/env/env.hpp>
-#include <kotavel/config/config_helpers.hpp>
-#include <kotavel/metrics/metrics.hpp>
 #include <span>
 #include <vector>
+
+#include <kotavel/config/config_helpers.hpp>
+#include <kotavel/container/container.hpp>
+#include <kotavel/env/env.hpp>
+#include <kotavel/foundation/application.hpp>
+#include <kotavel/metrics/metrics.hpp>
 
 namespace kotavel {
 struct ConsoleContext {

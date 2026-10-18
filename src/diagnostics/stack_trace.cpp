@@ -1,5 +1,7 @@
 #include <kotavel/diagnostics/error.hpp>
+
 #include "console_text.hpp"
+
 #include <algorithm>
 #include <cstdlib>
 #include <memory>

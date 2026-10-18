@@ -1,7 +1,8 @@
 #pragma once
-#include <kotavel/config/config.hpp>
 #include <iosfwd>
 #include <memory>
+
+#include <kotavel/config/config.hpp>
 
 namespace kotavel {
 // Ámbito prestado local al hilo. Config debe vivir más que el ámbito y sus vistas.

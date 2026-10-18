@@ -1,12 +1,13 @@
 #pragma once
 
-#include <kotavel/diagnostics/logger.hpp>
 #include <functional>
-#include <memory>
 #include <map>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string_view>
+
+#include <kotavel/diagnostics/logger.hpp>
 
 namespace kotavel {
 

@@ -1,5 +1,6 @@
-#include <kotavel/desktop/deep_link_router.hpp>
 #include <kotavel/http/server.hpp>
+#include <kotavel/http/api_response.hpp>
+#include <kotavel/http/controller.hpp>
 
 #include <algorithm>
 #include <array>
@@ -12,6 +13,81 @@
 namespace {
 void check(bool condition, const char* message) {
     if (!condition) throw std::runtime_error(message);
+}
+
+class StoreControllerRequest final : public kotavel::http::FormRequest {
+public:
+    using FormRequest::FormRequest;
+    kotavel::http::ValidationRules rules() const override {
+        return {{"name", {"required", "string", "min:3"}}};
+    }
+};
+
+class RouteBoundController final : public kotavel::http::Controller {
+public:
+    kotavel::http::Response index(const kotavel::http::Request& request) const {
+        return {200, "text/plain", std::string(request.path())};
+    }
+    kotavel::http::Response show(const kotavel::http::Request& request) const {
+        return {200, "text/plain", std::string(request.route("id").value_or("missing"))};
+    }
+    kotavel::http::Response store(const StoreControllerRequest& request) const {
+        return kotavel::http::ApiResponse::success(request.validated(), 201);
+    }
+};
+
+void test_controller_member_routes() {
+    kotavel::http::Router routes;
+    RouteBoundController controller;
+    auto items = kotavel::http::Route::api(routes).prefix("items").controller(controller);
+    items.get("/", &RouteBoundController::index).name("api.items.index");
+    items.group([](auto& items) {
+        items.post("/", &RouteBoundController::store).name("api.items.store");
+        items.prefix("{id}").group([](auto& item) {
+            item.get("/", &RouteBoundController::show).name("api.items.show");
+        });
+    });
+
+    const auto& index = routes.routes()[0];
+    const auto index_response = index.handler(
+        kotavel::http::Request(kotavel::http::Method::get, "/api/items/", {}));
+    check(index.path == "/api/items" && index_response.status == 200 &&
+          index_response.body == "/api/items/",
+          "controller member pointers should preserve route prefixes and receive Request");
+
+    const auto& store = routes.routes()[1];
+    const auto valid_request = kotavel::http::Request(kotavel::http::RequestData{
+        .method = kotavel::http::Method::post,
+        .kind = kotavel::http::RouteKind::api,
+        .path = "/api/items/",
+        .body = R"({"name":"Kotavel"})",
+        .headers = {{"content-type", "application/json"}},
+    });
+    const auto created = store.handler(valid_request);
+    check(created.status == 201 && created.body.find("Kotavel") != std::string::npos,
+          "controller member pointers should validate FormRequest before invoking the action");
+
+    const auto invalid_request = kotavel::http::Request(kotavel::http::RequestData{
+        .method = kotavel::http::Method::post,
+        .kind = kotavel::http::RouteKind::api,
+        .path = "/api/items/",
+        .body = "{}",
+        .headers = {{"content-type", "application/json"}},
+    });
+    const auto rejected = store.handler(invalid_request);
+    check(rejected.status == 422,
+          "controller member pointers should return FormRequest errors before action execution");
+
+    const auto& show = routes.routes()[2];
+    const auto show_request = kotavel::http::Request(kotavel::http::RequestData{
+        .method = kotavel::http::Method::get,
+        .kind = kotavel::http::RouteKind::api,
+        .path = "/api/items/42",
+        .route_parameters = {{"id", "42"}},
+    });
+    const auto shown = show.handler(show_request);
+    check(show.path == "/api/items/{id}" && shown.body == "42",
+          "controller route groups should retain nested prefixes and route parameters");
 }
 
 template<class Exception, class Function>
@@ -173,7 +249,7 @@ void test_named_routes_and_url_generation() {
     auto endpoints = kotavel::http::Route::api(kernel.routes());
     const auto deny_blocked_payload = [](const auto& request,
                                          const kotavel::http::Next& next) {
-        if (request.body == "blocked")
+        if (request.body() == "blocked")
             return kotavel::http::Response{403, "text/plain", "forbidden"};
         return next();
     };
@@ -208,7 +284,7 @@ void test_every_http_verb_and_request_view() {
     auto web = kotavel::http::Route::web(routes);
     const auto handler = [](const kotavel::http::RequestView& request) {
         return kotavel::http::Response{
-            200, "text/plain", std::string(request.path) + ":" + std::string(request.body)};
+            200, "text/plain", std::string(request.path()) + ":" + std::string(request.body())};
     };
 
     api.get("/resource", handler);
@@ -354,8 +430,20 @@ void test_http_kernel_middleware_pipeline() {
     });
     const auto failed = failure.handle(failure.routes().routes().front(),
         {kotavel::http::Method::get, "/api/failure", {}});
-    check(failed.status == 500 && failed.body == R"({"error":"internal_server_error"})",
+    check(failed.status == 500 && failed.body ==
+          R"({"errors":[{"detail":"An unexpected error occurred while processing the request.","status":"500","title":"Internal Server Error"}]})",
           "middleware exceptions should become a generic HTTP 500 response");
+
+    kotavel::http::HttpKernel web_failure(std::make_unique<FakeServer>(state));
+    web_failure.routes().web_get("/failure", [](const auto&) -> kotavel::http::Response {
+        throw std::runtime_error("private web failure");
+    });
+    const auto web_failed = web_failure.handle(web_failure.routes().routes().front(),
+        {kotavel::http::Method::get, "/failure", {}});
+    check(web_failed.status == 500 && web_failed.content_type == "text/html; charset=utf-8" &&
+          web_failed.body.find("500 Internal Server Error") != std::string::npos &&
+          web_failed.body.find("private web failure") == std::string::npos,
+          "web exceptions should remain HTML and hide internal exception details");
 
     expect<std::invalid_argument>([&] { kernel.use_global({}); },
           "empty global middleware must be rejected");
@@ -527,6 +615,49 @@ void test_nested_route_scopes_and_sealing() {
     }, "sealed", "a retained registrar must respect the router sealed state");
 }
 
+// El Kernel conserva todos los estados HTTP de error válidos y normaliza valores inválidos.
+void test_http_error_status_responses() {
+    auto state = std::make_shared<FakeServerState>();
+    kotavel::http::HttpKernel kernel(std::make_unique<FakeServer>(state));
+    int status = 400;
+    kernel.routes().api_get("/error", [&](const auto&) {
+        return kotavel::http::Response{status, "application/json", R"({"error":"test"})"};
+    });
+
+    const auto& route = kernel.routes().routes().front();
+    const kotavel::http::RequestView request{
+        kotavel::http::Method::get, "/api/error", {}};
+    for (int error_status = 400; error_status <= 599; ++error_status) {
+        status = error_status;
+        const auto response = kernel.handle(route, request);
+        check(response.status == error_status &&
+              response.content_type == "application/json" &&
+              response.body == R"({"error":"test"})",
+              "the Kernel should preserve every valid 4xx and 5xx response status and body");
+    }
+
+    for (const int invalid_status : {99, 600}) {
+        status = invalid_status;
+        const auto response = kernel.handle(route, request);
+        check(response.status == 500,
+              "out-of-range HTTP statuses should be normalized to HTTP 500");
+    }
+
+    const auto missing = kernel.not_found(
+        {kotavel::http::Method::get, "/api/missing", {}});
+    check(missing.status == 404 &&
+          missing.content_type == "application/json; charset=utf-8" &&
+          missing.body ==
+          R"({"errors":[{"detail":"The requested API route was not found.","status":"404","title":"Not Found"}]})",
+          "the Kernel should use the public API error format for unknown API paths");
+
+    const auto missing_web = kernel.not_found(
+        {kotavel::http::Method::get, "/missing", {}});
+    check(missing_web.status == 404 && missing_web.content_type == "text/html; charset=utf-8" &&
+          missing_web.body.find("404 Not Found") != std::string::npos,
+          "unknown web paths should receive an HTML error page");
+}
+
 // El kernel valida el listener y entrega la tabla de rutas al adaptador.
 void test_http_kernel_defaults_and_validation() {
     auto observed = std::make_shared<FakeServerState>();
@@ -600,47 +731,11 @@ void test_http_kernel_adapter_failure() {
     check(observed->stopped, "explicit shutdown should be forwarded to the adapter after a failure");
 }
 
-// Los deep links solo despachan pantallas conocidas y no ejecutan rutas arbitrarias.
-void test_desktop_deep_links() {
-    kotavel::desktop::DeepLinkRouter links("kotavel");
-    int opened = 0;
-    links.screen("pos/home", [&] { ++opened; });
-    check(links.dispatch("kotavel://pos/home") == kotavel::desktop::DeepLinkResult::dispatched,
-          "known deep links should dispatch");
-    check(opened == 1, "deep-link handler should run exactly once");
-    check(links.dispatch("https://example.test/pos/home") == kotavel::desktop::DeepLinkResult::invalid_uri,
-          "a different URI scheme must not dispatch");
-    check(links.dispatch("kotavel://pos/unknown") == kotavel::desktop::DeepLinkResult::unknown_route,
-          "unknown desktop destinations should be reported");
-    check(links.dispatch("kotavel://pos/home?command=unsafe") == kotavel::desktop::DeepLinkResult::invalid_uri,
-          "query strings are rejected until explicitly supported");
-    expect<std::logic_error>([&] {
-        links.screen("pos/home", [] {});
-    }, "duplicate deep-link routes must fail");
-
-    check(links.dispatch("kotavel://") == kotavel::desktop::DeepLinkResult::invalid_uri,
-          "a scheme without a destination should be rejected");
-    check(links.dispatch("Kotavel://pos/home") == kotavel::desktop::DeepLinkResult::invalid_uri,
-          "deep-link scheme matching should be case-sensitive");
-    check(links.dispatch("kotavel:/pos/home") == kotavel::desktop::DeepLinkResult::invalid_uri,
-          "deep links must use the registered URI form");
-    check(opened == 1, "invalid and unknown links must not invoke a screen");
-
-    expect_error<std::invalid_argument>([] { kotavel::desktop::DeepLinkRouter invalid(""); },
-        "scheme", "an empty URI scheme should fail at construction");
-    expect_error<std::invalid_argument>([] { kotavel::desktop::DeepLinkRouter invalid("bad scheme"); },
-        "scheme", "whitespace is not valid in a URI scheme");
-    expect_error<std::invalid_argument>([&] { links.screen("", [] {}); },
-        "route", "empty screen routes should fail clearly");
-    expect_error<std::invalid_argument>([&] { links.screen("../outside", [] {}); },
-        "route", "path traversal must not be accepted as a screen route");
-    expect_error<std::invalid_argument>([&] { links.screen("pos/home", {}); },
-        "handler", "empty screen handlers should fail clearly");
-}
 }
 
 int main() {
     try {
+        test_controller_member_routes();
         test_http_route_groups();
         test_laravel_style_route_dsl();
         test_named_routes_and_url_generation();
@@ -649,10 +744,10 @@ int main() {
         test_string_middleware_aliases();
         test_route_registration_validation_and_conflicts();
         test_nested_route_scopes_and_sealing();
+        test_http_error_status_responses();
         test_http_kernel_defaults_and_validation();
         test_http_kernel_adapter_failure();
-        test_desktop_deep_links();
-        std::cout << "HTTP routes and desktop deep links: OK\n";
+        std::cout << "HTTP routes and middleware: OK\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

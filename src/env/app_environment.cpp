@@ -1,5 +1,7 @@
 #include <kotavel/env/env.hpp>
+
 #include "environment_internal.hpp"
+
 #include <algorithm>
 
 namespace kotavel {

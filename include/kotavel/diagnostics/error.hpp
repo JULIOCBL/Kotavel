@@ -2,13 +2,14 @@
 
 #include <array>
 #include <cstddef>
-#include <kotavel/diagnostics/source_location.hpp>
+#include <exception>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <exception>
-#include <span>
+
+#include <kotavel/diagnostics/source_location.hpp>
 
 namespace kotavel {
 

@@ -1,16 +1,17 @@
 #pragma once
 
-#include <kotavel/config/config_value.hpp>
-#include <optional>
-#include <span>
 #include <functional>
 #include <map>
+#include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
 #include <unordered_map>
 #include <variant>
+
+#include <kotavel/config/config_value.hpp>
 
 namespace kotavel {
 // Instancia explícita: claves completas con puntos, sin árbol ni estado global.

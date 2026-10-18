@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/kotavel">
+    <file alias="branding/kotavel-mark.png">../../assets/branding/kotavel-mark.png</file>
+  </qresource>
+</RCC>

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <kotavel/diagnostics/error.hpp>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -9,6 +8,8 @@
 #include <span>
 #include <string_view>
 #include <unordered_map>
+
+#include <kotavel/diagnostics/error.hpp>
 
 namespace kotavel {
 
@@ -36,10 +37,10 @@ struct LogRecord {
     std::string_view code;
     std::string_view operation;
     std::string_view message;
-    std::string_view module; // Vacío utiliza LogOptions::module.
-    std::span<const ContextField> fields;
+    std::string_view module{}; // Vacío utiliza LogOptions::module.
+    std::span<const ContextField> fields{};
     const DiagnosticContext* diagnostic = nullptr;
-    std::span<const ErrorCause> causes;
+    std::span<const ErrorCause> causes{};
     bool causes_truncated = false;
 };
 struct LogStats {

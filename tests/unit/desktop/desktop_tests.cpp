@@ -62,6 +62,8 @@ class FakePlatform final : public kotavel::desktop::DesktopPlatform {
 public:
     int run(int argc, char** argv, const std::filesystem::path& views_root,
             const StartCallback& start) override {
+        // Este adaptador falso valida el ciclo; Qt consume los argumentos reales.
+        (void)argv;
         received_argc = argc;
         received_root = views_root;
         start(windows);
@@ -137,9 +139,23 @@ void test_deep_link_translation_and_context_lifetime() {
     check(kotavel::desktop::dispatch_deep_link(routes, "https://pos/home", "kotavel", context) ==
               kotavel::desktop::DispatchResult::invalid_path,
           "deep links with another scheme should be rejected");
+    // Rechazar estructuras ambiguas evita que URI externas salten las rutas registradas.
+    for (const auto uri : {"kotavel://", "kotavel:///pos/home",
+                           "kotavel://pos/home?next=/admin",
+                           "kotavel://pos/home#fragment", "kotavel://user@pos/home",
+                           "kotavel://pos:8080/home", "Kotavel://pos/home",
+                           "kotavel:/pos/home", "kotavel://pos/../outside",
+                           "kotavel://pos//home"}) {
+        check(kotavel::desktop::dispatch_deep_link(routes, uri, "kotavel", context) ==
+                  kotavel::desktop::DispatchResult::invalid_path,
+              "malformed or ambiguous deep links should be rejected");
+    }
     check(kotavel::desktop::dispatch_deep_link(routes, "kotavel://pos/unknown", "kotavel", context) ==
               kotavel::desktop::DispatchResult::not_found,
           "well-formed deep links without a route should report not_found");
+    check(kotavel::desktop::dispatch_deep_link(routes, "shop://pos/home", "shop", context) ==
+              kotavel::desktop::DispatchResult::dispatched,
+          "deep-link schemes should be supplied by the consumer");
     check(context.navigate("/pos/home") == kotavel::desktop::DispatchResult::dispatched,
           "desktop context should delegate navigation to the route table");
     context.close("main");

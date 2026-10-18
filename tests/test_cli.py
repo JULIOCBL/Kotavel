@@ -30,6 +30,24 @@ class ConsumerToolsTests(unittest.TestCase):
                 self.assertEqual(cli.main(['--project', str(self.root), name, '--build-type', 'Release']), 0)
             command.assert_called_once_with([flag, '--build-type', 'Release', '--project', str(self.root.resolve())])
 
+    def test_run_forwards_deep_link_to_consumer_command(self):
+        uri = 'kotavel://pos/home'
+        with patch.object(install, 'main') as command:
+            self.assertEqual(cli.main(['--project', str(self.root), 'run', '--env=development', '--deep-link', uri]), 0)
+        command.assert_called_once_with([
+            '--run', '--env=development', '--deep-link', uri,
+            '--project', str(self.root.resolve()),
+        ])
+
+    def test_run_application_passes_uri_after_runtime_options(self):
+        with patch.object(install, 'ROOT', self.root), patch.object(install, 'run') as command:
+            install.run_application(Path('build/kotavel-lab'), 'development',
+                                    'kotavel://pos/home', {'PATH': ''})
+        command.assert_called_once_with([
+            Path('build/kotavel-lab'), '--env=development',
+            '--project-root=' + str(self.root), 'kotavel://pos/home',
+        ], {'PATH': ''})
+
     def test_process_failure_does_not_dump_python_command_repr(self):
         output = io.StringIO()
         failure = subprocess.CalledProcessError(1, ['kotavel-lab.exe', '--env=production'])
@@ -102,12 +120,13 @@ class ConsumerToolsTests(unittest.TestCase):
                 if failure is None:
                     self.assertEqual(commands[0], [python, '-m', 'unittest', 'discover', '-s', str(framework / 'tests'), '-p', 'test_*.py'])
                     self.assertEqual(commands[1][5], str(self.root / 'tests'))
-                    self.assertIn('-DCMAKE_CXX_COMPILER=/selected compiler/clang++', commands[2])
-                    self.assertIn('-DCMAKE_BUILD_TYPE=' + build_type, commands[2])
-                    self.assertEqual(commands[5], ['conan', 'install', '.', '--build=missing'])
+                    self.assertEqual(commands[2], ['conan', 'install', '.', '--build=missing'])
+                    self.assertIn('-DCMAKE_CXX_COMPILER=/selected compiler/clang++', commands[3])
+                    self.assertIn('-DCMAKE_BUILD_TYPE=' + build_type, commands[3])
+                    self.assertIn('-DCMAKE_PREFIX_PATH=' + str(self.root / 'build' / build_type / 'generators'), commands[3])
                     self.assertIn('-DBUILD_TESTING=ON', commands[6])
                     self.assertIn('conan-' + build_type.lower(), commands[8])
-                    for index in (4, 8):
+                    for index in (5, 8):
                         self.assertIn('--no-tests=error', commands[index])
 
     def test_framework_validation_rejects_missing_python_suites(self):
@@ -128,13 +147,26 @@ class ConsumerToolsTests(unittest.TestCase):
         grouped_core_test.unlink()
         self.assertFalse(install.has_framework_cpp_tests(framework))
 
-    def test_consumer_executable_is_configurable_and_rejects_paths(self):
+    def test_consumer_executable_reads_cmake_configuration_manifest(self):
         with patch.object(install, 'ROOT', self.root):
-            (self.root / 'kotavel.json').write_text(json.dumps({'executable': 'another-app'}))
-            self.assertEqual(install.project_executable(), 'another-app')
-            (self.root / 'kotavel.json').write_text(json.dumps({'executable': '../outside'}))
+            manifest = self.root / 'build/Debug/kotavel-app-name.txt'
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text('Kotavel Laboratory\n')
+            self.assertEqual(install.project_executable('Debug'), 'Kotavel Laboratory')
+            manifest.write_text('../outside\n')
             with self.assertRaises(RuntimeError):
-                install.project_executable()
+                install.project_executable('Debug')
+
+    def test_consumer_executable_path_supports_app_output_directory(self):
+        with patch.object(install, 'ROOT', self.root):
+            app_binary = self.root / 'build/Debug/app/Kotavel'
+            app_binary.parent.mkdir(parents=True)
+            app_binary.touch()
+            self.assertEqual(install.project_executable_path('Debug', 'Kotavel', 'Darwin'), app_binary)
+            app_binary.unlink()
+            flat_binary = self.root / 'build/Debug/Kotavel'
+            flat_binary.touch()
+            self.assertEqual(install.project_executable_path('Debug', 'Kotavel', 'Darwin'), flat_binary)
 
     def test_missing_consumer_profiles_use_packaged_defaults(self):
         with patch.object(install, 'ROOT', self.root):

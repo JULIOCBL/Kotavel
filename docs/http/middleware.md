@@ -44,7 +44,7 @@ aplicación no lo necesita. También existen `use_global()`, `use_api()`,
 El tipo base es:
 
 ```cpp
-using Middleware = std::function<Response(const RequestView&, const Next&)>;
+using Middleware = std::function<Response(const Request&, const Next&)>;
 using Next = std::function<Response()>;
 ```
 
@@ -56,7 +56,7 @@ y no guardes la referencia para usarla luego.
 
 ```cpp
 kotavel::http::Middleware require_body = [](const auto& request, const auto& next) {
-    if (request.body.empty())
+    if (request.body().empty())
         return kotavel::http::Response{400, "text/plain; charset=utf-8", "Body requerido"};
     return next();
 };
@@ -114,7 +114,7 @@ adaptador que captura una copia del objeto:
 class RequireToken final {
 public:
     kotavel::http::Response handle(
-        const kotavel::http::RequestView& request,
+        const kotavel::http::Request& request,
         const kotavel::http::Next& next) const;
 
     kotavel::http::Middleware as_middleware() const;
@@ -143,8 +143,9 @@ reglas específicas del consumidor entren al núcleo.
   500 genérica; el texto interno de la excepción no se entrega al cliente.
 - Al arrancar el `HttpKernel`, rutas, defaults y aliases quedan sellados.
 
-La estructura `RequestView` contiene vistas no propietarias. No conserves
-`path`, `body` ni el objeto de continuación después de regresar del callback.
+`Request` posee sus datos de transporte. El helper `request()` también expone la
+solicitud activa durante la llamada. No conserves la referencia ni el objeto de
+continuación después de regresar del callback; copia los valores que necesites.
 El adaptador puede atender peticiones simultáneamente; las clases middleware no
 deben compartir estado mutable sin sincronización. Evita bloquear el event loop.
 

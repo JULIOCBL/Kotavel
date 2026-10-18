@@ -1,10 +1,13 @@
 #include <kotavel/console/runtime.hpp>
+
 #include "arguments.hpp"
 #include "settings_error.hpp"
 #include "../env/environment_internal.hpp"
 #include "../text/messages.hpp"
+
 #include <kotavel/system/os.hpp>
 #include <kotavel/diagnostics/bootstrap_logger.hpp>
+
 #include <array>
 #include <iomanip>
 #include <iostream>

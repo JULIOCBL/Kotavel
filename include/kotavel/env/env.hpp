@@ -1,11 +1,11 @@
 #pragma once
+#include <filesystem>
+#include <iosfwd>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <variant>
-#include <filesystem>
-#include <map>
-#include <iosfwd>
 
 namespace kotavel {
 // Una fuente entrega copias: ningún consumidor retiene el puntero de getenv().

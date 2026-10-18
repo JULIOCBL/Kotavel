@@ -1,6 +1,8 @@
 #include <kotavel/console/runtime.hpp>
-#include <array>
+
 #include "settings_error.hpp"
+
+#include <array>
 
 namespace kotavel {
 namespace {

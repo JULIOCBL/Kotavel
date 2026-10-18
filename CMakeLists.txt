@@ -69,17 +69,26 @@ target_include_directories(kotavel_core PUBLIC
 target_include_directories(kotavel_core PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated/text")
 
 # API y web son opcionales; solo este adaptador incorpora Drogon al ejecutable.
-add_library(kotavel_http_contract STATIC src/http/router.cpp src/http/kernel.cpp)
+find_package(RapidJSON CONFIG REQUIRED)
+add_library(kotavel_http_contract STATIC
+    src/http/router.cpp
+    src/http/kernel.cpp
+    src/http/api_response.cpp
+    src/http/request.cpp
+    src/http/form_request.cpp)
 add_library(Kotavel::HttpContract ALIAS kotavel_http_contract)
 target_compile_features(kotavel_http_contract PUBLIC cxx_std_23)
 set_target_properties(kotavel_http_contract PROPERTIES CXX_EXTENSIONS OFF EXPORT_NAME HttpContract)
 target_include_directories(kotavel_http_contract PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
-target_link_libraries(kotavel_http_contract PUBLIC Kotavel::Core)
+target_link_libraries(kotavel_http_contract PUBLIC Kotavel::Core
+    PRIVATE $<BUILD_INTERFACE:rapidjson>)
+if(WIN32)
+    target_link_libraries(kotavel_http_contract PUBLIC Ws2_32)
+endif()
 
 add_library(kotavel_desktop STATIC
-    src/desktop/deep_link_router.cpp
     src/desktop/desktop.cpp)
 add_library(Kotavel::Desktop ALIAS kotavel_desktop)
 target_compile_features(kotavel_desktop PUBLIC cxx_std_23)
@@ -90,7 +99,10 @@ target_include_directories(kotavel_desktop PUBLIC
 
 if(KOTAVEL_BUILD_DESKTOP_QT)
     find_package(Qt6 REQUIRED COMPONENTS Gui Qml Quick)
-    add_library(kotavel_desktop_qt STATIC src/desktop/qt_platform.cpp)
+    add_library(kotavel_desktop_qt STATIC
+        src/desktop/qt_platform.cpp
+        src/desktop/kotavel_branding.qrc)
+    set_target_properties(kotavel_desktop_qt PROPERTIES AUTORCC ON)
     add_library(Kotavel::DesktopQt ALIAS kotavel_desktop_qt)
     target_compile_features(kotavel_desktop_qt PUBLIC cxx_std_23)
     set_target_properties(kotavel_desktop_qt PROPERTIES CXX_EXTENSIONS OFF EXPORT_NAME DesktopQt)
@@ -191,6 +203,16 @@ if(KOTAVEL_BUILD_TESTS)
     add_executable(kotavel_http_middleware_tests tests/unit/http/middleware_tests.cpp)
     target_link_libraries(kotavel_http_middleware_tests PRIVATE Kotavel::HttpContract)
     add_test(NAME kotavel.http.middleware COMMAND kotavel_http_middleware_tests)
+    add_executable(kotavel_api_response_tests tests/unit/http/api_response_tests.cpp)
+    target_link_libraries(kotavel_api_response_tests PRIVATE Kotavel::HttpContract)
+    add_test(NAME kotavel.http.api_response COMMAND kotavel_api_response_tests)
+    add_executable(kotavel_http_request_tests tests/unit/http/request_tests.cpp)
+    target_link_libraries(kotavel_http_request_tests PRIVATE Kotavel::HttpContract)
+    add_test(NAME kotavel.http.request COMMAND kotavel_http_request_tests)
+    add_executable(kotavel_http_content_negotiation_tests
+        tests/unit/http/content_negotiation_tests.cpp)
+    target_link_libraries(kotavel_http_content_negotiation_tests PRIVATE Kotavel::HttpContract)
+    add_test(NAME kotavel.http.content_negotiation COMMAND kotavel_http_content_negotiation_tests)
     add_executable(kotavel_diagnostics_tests tests/unit/diagnostics/diagnostics_tests.cpp)
     target_link_libraries(kotavel_diagnostics_tests PRIVATE Kotavel::Core)
     add_test(NAME kotavel.diagnostics COMMAND kotavel_diagnostics_tests)

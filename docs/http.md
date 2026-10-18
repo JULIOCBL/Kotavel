@@ -5,19 +5,86 @@ target opcional `Kotavel::Http` implementa actualmente el contrato con Drogon;
 `Kotavel::Core` no depende de él. API y web comparten un listener HTTP, pero sus
 rutas se registran como grupos distintos.
 
+## Respuestas JSON de API
+
+`kotavel::http::ApiResponse` es parte de la API pública en
+`<kotavel/http/api_response.hpp>`. Los handlers API pueden usar `success()` para
+convertir vectores, mapas y valores compatibles a JSON. Las respuestas siguen
+este formato:
+
+```cpp
+Route.get("/users", [](const kotavel::http::Request&) {
+    const std::vector<User> users = load_users();
+    return kotavel::http::ApiResponse::success(users, 200, "Users", "Users loaded");
+});
+```
+
+```json
+{"data":[{"id":1,"name":"Ada"}],"meta":{"title":"Users","message":"Users loaded"}}
+```
+
+### Negociación del formato de respuesta
+
+El Kernel usa `Accept` para comprobar si el cliente puede recibir el formato
+predeterminado de la ruta. Las rutas API ofrecen `application/json`; las rutas
+web ofrecen `text/html`. Si falta `Accept`, se usa el formato de la ruta. También
+se aceptan rangos como `application/*`, `text/*` y `*/*`, junto con sus valores
+de calidad `q`. Si el cliente excluye el formato de la ruta o solo acepta otro,
+Kotavel responde `406 Not Acceptable` sin ejecutar middleware ni el handler.
+Los errores siguen el formato predeterminado de la ruta: JSON en API y HTML en
+web. Cada respuesta incluye el `Content-Type` de su representación.
+
+`Content-Type` tiene otro propósito: describe el formato del cuerpo recibido,
+por ejemplo `application/json` en un POST con JSON.
+
+Los tipos propios se convierten mediante una especialización pública de
+`kotavel::http::ApiJsonSerializer<T>`. Las claves de `std::map` y
+`std::unordered_map` deben ser cadenas o enteros; las claves enteras se
+convierten en cadenas JSON. El orden de `std::unordered_map` no está definido.
+
+```cpp
+template <>
+struct kotavel::http::ApiJsonSerializer<User> {
+    static kotavel::http::JsonValue serialize(const User& user) {
+        return kotavel::http::JsonValue::Object{
+            {"id", user.id},
+            {"name", user.name},
+        };
+    }
+};
+```
+
+`error()` acepta una lista para errores de validación o un solo título y detalle:
+
+```cpp
+return kotavel::http::ApiResponse::error(422, {
+    {"Validation Failed", "The email is required", std::string("email")},
+    {"Validation Failed", "The name is required", std::string("name")},
+});
+```
+
+Esto produce un objeto `errors` con el estado HTTP, título, detalle y, cuando
+existe, `source.field`. El Kernel usa el mismo formato para errores API 404 y
+500. Las rutas web siguen devolviendo HTML; el Kernel presenta esos errores en
+HTML también. `ApiResponse::success(data, 204)` devuelve una respuesta vacía.
+
+RapidJSON se usa internamente para escribir la respuesta. Los serializadores
+personalizados usan `JsonValue`, el contrato JSON propio de Kotavel, para que la
+biblioteca interna se pueda sustituir sin cambiar el código de las aplicaciones.
+
 ## Rutas API y web
 
 ```cpp
 kotavel::http::HttpKernel kernel(kotavel::http::make_server());
 auto Route = kotavel::http::Route::api(kernel.routes());
 
-Route.get("/health", [](const kotavel::http::RequestView&) {
+Route.get("/health", [](const kotavel::http::Request&) {
     return kotavel::http::Response{
         200, "application/json; charset=utf-8", R"({"status":"ok"})"};
 }).name("api.health");
 
 auto Web = kotavel::http::Route::web(kernel.routes());
-Web.get("/", [](const kotavel::http::RequestView&) {
+Web.get("/", [](const kotavel::http::Request&) {
     return kotavel::http::Response{
         200, "text/html; charset=utf-8", "<h1>Inicio</h1>"};
 });
@@ -31,9 +98,11 @@ En ellos se usan `get`, `post`, `put`, `patch` y `remove` (`remove` registra
 el verbo HTTP DELETE y evita usar la palabra reservada `delete` de C++). El grupo API añade
 el prefijo `/api`; web conserva su ruta. A cada endpoint se le puede asignar un
 nombre único con `.name("api.health")`; `Router::url_for("api.health")` devuelve
-la URL registrada. Los nombres son opcionales; los parámetros dinámicos y la
-generación de URL con parámetros aún no están implementados. Para agrupar por
-prefijo:
+la URL registrada. Los nombres son opcionales. Los parámetros dinámicos se leen
+desde `request.route("id")`. `Request` ofrece `input()`, `query()`, `route()`,
+`header()`, `all()`, `has()` y `filled()`. `input()` consulta primero el cuerpo y
+después la query; `query()` solo consulta la URL. El helper `request()` permite
+acceder a la solicitud activa desde middleware y handlers. Para agrupar por prefijo:
 
 ```cpp
 Route.prefix("users").group([](auto& Route) {
@@ -88,7 +157,7 @@ También es posible registrar middleware inline para casos puntuales:
 ```cpp
 kernel.use_global([](const auto& request, const kotavel::http::Next& next) {
     // Un middleware puede responder directamente para rechazar una solicitud.
-    if (request.path == "/maintenance")
+        if (request.path() == "/maintenance")
         return kotavel::http::Response{503, "text/plain", "Mantenimiento"};
     return next();
 });
@@ -96,7 +165,7 @@ kernel.use_global([](const auto& request, const kotavel::http::Next& next) {
 // Middleware heredado por todas las rutas del grupo /maintenance.
 auto Maintenance = Route.prefix("maintenance").middleware(
     [](const auto& request, const kotavel::http::Next& next) {
-        if (request.body == "deny")
+        if (request.body() == "deny")
             return kotavel::http::Response{403, "text/plain", "Prohibido"};
         return next();
     });
@@ -122,10 +191,68 @@ ese endpoint. Los aliases se resuelven durante la configuración, no en cada
 solicitud. Todavía no hay parámetros de alias, grupos
 nombrados personalizados, sesiones, CSRF ni limitador de solicitudes incluidos.
 
+Para validar antes de llegar al controlador, deriva una clase de `FormRequest`,
+define `authorize()` y `rules()`, y enlaza el controlador al contexto de rutas.
+Kotavel valida antes de invocar la acción; `validated()` devuelve solo los campos
+declarados en las reglas. Las peticiones API inválidas usan el error JSON estándar
+con estado 422; la autorización denegada devuelve 403.
+
+```cpp
+class StoreItemRequest : public kotavel::http::FormRequest {
+public:
+    using FormRequest::FormRequest;
+    kotavel::http::ValidationRules rules() const override {
+        return {{"name", {"required", "string", "min:3"}}};
+    }
+};
+
+class ItemController : public kotavel::http::Controller {
+public:
+    kotavel::http::Response store(const StoreItemRequest& form) const {
+        return kotavel::http::ApiResponse::success(form.validated(), 201);
+    }
+};
+
+auto items = kotavel::http::Route::api(routes).prefix("items").controller(controller);
+items.post("/", &ItemController::store);
+```
+
+`ValidationRules` expone reglas Laravel como cadenas. Incluye presencia y
+condiciones (`required`, `present`, `missing`, `filled`, `sometimes`, `nullable`,
+`required_if`, `required_if_accepted`, `required_if_declined`, `required_with`,
+`accepted_if`, `declined_if`, `prohibited_if`, `exclude_if` y sus variantes),
+tipos y texto (`string`, `array`, `list`, `integer`, `numeric`, `boolean`,
+`accepted`, `declined`, `email`, `url`, `active_url`, `ip`, `ipv4`, `ipv6`,
+`json`, `alpha`, `alpha_num`, `alpha_dash`, `ascii`, `lowercase`, `uppercase`,
+`regex`, `not_regex`, `in`, `not_in`, `enum`, `same`, `different`, `confirmed`,
+`current_password`, `starts_with`, `ends_with`, `doesnt_start_with`,
+`doesnt_end_with`, `hex_color`, `mac_address`, `uuid` y `ulid`), límites (`min`, `max`,
+`size`, `between`, `decimal`, `digits`, `digits_between`, `min_digits`,
+`max_digits`, `gt`, `gte`, `lt`, `lte`, `multiple_of`), fechas, arreglos y
+archivos (`after`, `before`, `date_format`, `timezone`, `distinct`, `contains`,
+`in_array`, `array_keys`, `required_array_keys`, `file`, `image`, `mimes`,
+`mimetypes`, `extensions`, `dimensions`, `encoding`) y las demás reglas auxiliares
+de Laravel que aceptan este contrato. Las reglas de base de datos `exists` y
+`unique` requieren un proveedor de datos y no se incluyen.
+
+El DSL recibe reglas como `vector<string>`; no puede recibir los objetos fluent de
+Laravel como `Password`, `Rule::anyOf` o reglas personalizadas. Para esas
+validaciones, expresa las reglas simples en la lista o deriva `FormRequest` y
+sobrescribe `validate()`/`authorize()` según el contrato público. `current_password`
+llama al proveedor de autenticación de la aplicación mediante
+`current_password_matches(password, guard)`. Sin proveedor, la regla falla. La
+verificación `email:dns` y `active_url` requiere resolución DNS disponible en el
+sistema. `email:dns` comprueba que el host resuelva; `email:spoof` requiere ICU y
+no está disponible en este adaptador. `date_format` cubre los tokens PHP
+habituales (`Y`, `y`, `m`, `n`, `d`,
+`j`, `H`, `h`, `G`, `g`, `i`, `s`) y `timezone` consulta la base IANA instalada.
+
 El DSL usa callbacks C++ y respuestas explícitas, sin reflexión ni resolución
 global de fachadas. Un mismo par método/ruta y cada nombre asignado deben ser
-únicos. Los handlers son síncronos: no deben bloquear el event loop. Las vistas de `RequestView` solo
-son válidas durante la llamada; copia los datos antes de conservarlos. El
+únicos. Los handlers son síncronos: no deben bloquear el event loop. `Request`
+posee los datos de transporte; el helper `request()` devuelve una referencia
+válida solo durante la ejecución del middleware o handler. Copia los valores antes
+de conservarlos. El
 registro se congela al arrancar el kernel, que es de un solo uso por proceso.
 
 El adaptador puede procesar handlers simultáneamente. Los handlers y servicios
@@ -156,18 +283,19 @@ kernel.set_exception_reporter([&application](const auto& route, const auto& requ
 
 ## Registro de peticiones
 
-El Kernel imprime una línea por handler en la terminal donde se ejecuta la
-aplicación. Incluye fecha y hora UTC, método, ruta solicitada, estado HTTP y
-duración de toda la cadena de middleware y el handler:
+El adaptador imprime una línea por cada petición HTTP en la terminal donde se
+ejecuta la aplicación, incluidas respuestas automáticas como 404 y 405. Incluye
+fecha y hora UTC, método, ruta solicitada, estado HTTP y duración hasta enviar
+la respuesta:
 
 ```text
 [HTTP] 2026-10-17T18:42:03.127Z GET /api/health 200 0.184 ms
 ```
 
 La duración usa un reloj monotónico y cubre la ejecución de middleware y el
-handler hasta que se construye la respuesta; no mide el viaje completo por la red. El
-registro no incluye query strings ni cuerpos. Las líneas se sincronizan para que
-las peticiones simultáneas no mezclen su salida.
+handler; no mide el viaje completo por la red. El registro no incluye query
+strings ni cuerpos. Las líneas se sincronizan para que las peticiones
+simultáneas no mezclen su salida.
 
 ## Listener y acceso de red
 
@@ -178,25 +306,11 @@ conexiones desde la misma máquina. El puerto debe estar entre 1 y 65535.
 debe conectarse a la IP LAN del servidor. El firewall y la red deben permitir
 ese tráfico.
 
-## Deep links de escritorio
+## Navegación desktop
 
-Un deep link es una URI que el sistema operativo entrega a la aplicación de
-escritorio. Kotavel valida el esquema y traduce el destino a una pantalla que la
-aplicación registró explícitamente:
-
-```cpp
-kotavel::desktop::DeepLinkRouter links("kotavel");
-links.screen("pos/home", [] {
-    // La aplicación activa la Screen de inicio del punto de venta.
-});
-links.dispatch("kotavel://pos/home");
-```
-
-Solo se invocan callbacks registrados; no se aceptan destinos arbitrarios. API
-y web usan URLs HTTP y no son deep links de escritorio. El despacho está
-implementado; la asociación del esquema con el ejecutable aún depende del
-instalador o de la configuración específica de Windows, macOS y Linux. La app
-debe entregar al router las URIs recibidas al iniciar o activarse.
+Las rutas desktop y sus deep links pertenecen al módulo
+[desktop](desktop.md), que integra el registro de destinos, la validación de la
+URI y el despacho de la ventana en un solo router.
 
 ## Dependencia opcional
 

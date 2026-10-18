@@ -1,4 +1,5 @@
 #include <kotavel/diagnostics/error.hpp>
+
 #include "console_text.hpp"
 
 namespace kotavel {

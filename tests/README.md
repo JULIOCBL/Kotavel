@@ -114,13 +114,24 @@ listas), aliases desconocidos/duplicados, callbacks y paths inválidos, handlers
 `RequestView`, inmutabilidad al arrancar y fallos del adaptador. Comprueba el
 orden y separación de middleware global, API, web, grupos y endpoints, la
 respuesta corta, errores convertidos a HTTP 500 y el cierre de registros después
-del arranque. También verifica valores predeterminados del listener y deep links
+del arranque. Recorre todos los códigos HTTP de error 400–599, valida que se
+conserven y comprueba el 404 JSON del Kernel y el 404 HTML web. `kotavel.http.api_response`
+verifica los sobres JSON, serialización de vectores, mapas ordenados y no ordenados,
+serializadores personalizados, errores de validación y respuestas 204. También verifica valores predeterminados del listener y deep links
 inválidos, destinos desconocidos, handlers duplicados y rutas fuera de su espacio.
 La suite unitaria usa un adaptador falso; la integración del Laboratorio abre el
-listener real y valida las líneas de acceso y el middleware de ejemplo.
+listener real y valida, en orden, las respuestas exitosas y de error (400, 403,
+404, 405 y 422), además de una sola línea de consola por petición. El caso 500
+comprueba la respuesta genérica, el reporte de excepción y su línea de acceso.
 
 `kotavel.http.middleware` prueba la configuración declarativa global, los
 defaults API/web, aliases por cadena, orden de ejecución y alcance por grupo,
 respuestas que cortan la cadena, validación de callbacks y aliases, excepciones
 convertidas a HTTP 500 y el sellado del Kernel al arrancar. Usa un adaptador
 falso, así que no abre sockets.
+
+`kotavel.http.content_negotiation` cubre los defaults JSON/HTML con y sin
+`Accept`, tipos exactos, comodines, listas de preferencias, mayúsculas,
+parámetros `q`, precedencia de `q=0`, valores mal formados, 404, 405, OPTIONS y
+errores de JSON. Verifica que un 406 incluya el formato de error correspondiente
+y se produzca antes del middleware o handler.
