@@ -28,9 +28,12 @@ bool valid_route(std::string_view path) {
 
 std::string deep_link_path(std::string_view uri, std::string_view scheme) {
     const std::string prefix = std::string(scheme) + "://";
+    const std::string bare_scheme = std::string(scheme) + ":";
+    if (uri == bare_scheme || uri == bare_scheme + "/" || uri == prefix ||
+        uri == prefix + "/")
+        return "/";
     if (!uri.starts_with(prefix)) return {};
     const auto destination = uri.substr(prefix.size());
-    if (destination.empty()) return "/";
     if (destination.find_first_of("?#") != std::string_view::npos ||
         destination.find('@') != std::string_view::npos ||
         destination.find(':') != std::string_view::npos)

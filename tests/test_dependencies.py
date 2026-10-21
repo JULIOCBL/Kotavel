@@ -165,7 +165,7 @@ class DependencyTests(unittest.TestCase):
             self.assertEqual(conan, binary)
             self.assertEqual(env['PATH'], separator.join((str(binary.parent), 'compiler', 'original')))
             expected_home = Path.home() / '.k' if system == 'nt' else self.root / '.kotavel/conan'
-            self.assertEqual(env['CONAN_HOME'], str(expected_home))
+            self.assertEqual(Path(env['CONAN_HOME']).resolve(), expected_home.resolve())
             if system == 'nt':
                 self.assertEqual(env['CONAN_OPENSSL_CONFIGURATION'], 'mingw64')
             else:

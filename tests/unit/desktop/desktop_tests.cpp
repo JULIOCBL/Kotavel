@@ -135,11 +135,13 @@ void test_deep_link_translation_and_context_lifetime() {
     });
     FakeWindows windows;
     kotavel::desktop::DesktopContext context(routes, windows);
-    check(kotavel::desktop::dispatch_deep_link(routes, "kotavel://", "kotavel", context) ==
-              kotavel::desktop::DispatchResult::dispatched,
-          "the bare scheme should dispatch the desktop home route");
-    check(windows.views["main"] == "desktop.home",
-          "the bare scheme should show the main view");
+    for (const auto uri : {"kotavel://", "kotavel:", "kotavel:/", "kotavel:///"}) {
+        check(kotavel::desktop::dispatch_deep_link(routes, uri, "kotavel", context) ==
+                  kotavel::desktop::DispatchResult::dispatched,
+              "bare-scheme URL variants should dispatch the desktop home route");
+        check(windows.views["main"] == "desktop.home",
+              "bare-scheme URL variants should show the main view");
+    }
     check(kotavel::desktop::dispatch_deep_link(routes, "kotavel://pos/home", "kotavel", context) ==
               kotavel::desktop::DispatchResult::dispatched,
           "deep links should translate their host and path to desktop routes");
