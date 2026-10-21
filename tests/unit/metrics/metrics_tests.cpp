@@ -61,6 +61,9 @@ void check_process_metrics_provider_contract() {
     auto provider = std::make_shared<FixedMetricsProvider>();
     ProcessMetricsCollector collector(provider);
     const auto first = collector.sample();
+    // The collector uses a real steady clock. Keep this test independent of how
+    // quickly an optimized runner can execute two consecutive samples.
+    std::this_thread::sleep_for(10ms);
     const auto second = collector.sample();
     check(first && second, "Injected process metrics provider did not produce samples");
     check(provider->reads == 2, "Collector did not delegate both reads to its provider");
