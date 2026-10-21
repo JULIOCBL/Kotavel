@@ -6,6 +6,9 @@ import os
 # La receta es la fuente de las dependencias del framework en ambos modos.
 # Mantén estas constantes literales: el consumidor local las lee sin ejecutar la receta.
 FRAMEWORK_REQUIRES = ("rapidjson/1.1.0",)
+# RapidJSON 1.1.0 has an invalid assignment operator rejected by Clang 23.
+# Keep the existing dependency on macOS/Linux; use the fixed upstream snapshot on Windows.
+FRAMEWORK_PLATFORM_REQUIRES = {"Windows": ("rapidjson/cci.20250205",)}
 FRAMEWORK_OPTIONAL_REQUIRES = {
     "http": ("drogon/1.9.13",),
     "desktop": ("qt/6.11.1",),
@@ -49,7 +52,12 @@ class KotavelConan(ConanFile):
     default_options = {"with_http": False, "with_desktop": False}
 
     def requirements(self):
+        platform_requires = FRAMEWORK_PLATFORM_REQUIRES.get(str(self.settings.os), ())
+        replaced = {reference.split("/", 1)[0] for reference in platform_requires}
         for reference in FRAMEWORK_REQUIRES:
+            if reference.split("/", 1)[0] not in replaced:
+                self.requires(reference)
+        for reference in platform_requires:
             self.requires(reference)
         if self.options.with_http:
             self.requires("drogon/1.9.13", options={

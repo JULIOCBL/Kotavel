@@ -1,5 +1,4 @@
 """Verify profile selection and preservation without installing tools."""
-import importlib.util
 import json
 import os
 import shutil
@@ -10,9 +9,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-spec = importlib.util.spec_from_file_location('kotavel_setup', Path(__file__).resolve().parents[1] / 'tools' / 'kotavel_cli' / 'install.py')
-setup = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(setup)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from tools.kotavel_cli import install as setup
 
 
 class ProfileTests(unittest.TestCase):
@@ -24,6 +22,10 @@ class ProfileTests(unittest.TestCase):
                 self.assertEqual(config['settings']['os'], expected_os)
                 self.assertNotIn('compiler.version', config['settings'])
                 self.assertNotIn('arch', config['settings'])
+                if system == 'Windows':
+                    self.assertEqual(config['options']['openssl/*:no_apps'], 'True')
+                    self.assertIn('atomic', config['conf']['tools.build:cxxflags'])
+                    self.assertIn('_CRT_RAND_S', config['conf']['tools.build:cxxflags'])
 
     def test_profile_is_the_source_of_build_configuration(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -138,7 +140,15 @@ class WindowsOptimizationTests(unittest.TestCase):
         self.assertEqual(prepared['compiler_bin'], str(binary))
         self.assertEqual(env['PATH'], str(binary) + ';existing-path')
         self.assertEqual(prepared['shell'], ['pwsh.exe', '-NoLogo', '-NoProfile'])
+        self.assertEqual(prepared['build_environment'], {'CONAN_OPENSSL_CONFIGURATION': 'mingw64'})
         self.assertEqual(json.loads((self.tools / 'platform.json').read_text(encoding='utf-8-sig')), prepared)
+
+    def test_activation_preserves_openssl_mingw_target(self):
+        prepared = {'activation_kind': 'powershell',
+                    'build_environment': {'CONAN_OPENSSL_CONFIGURATION': 'mingw64'}}
+        setup.write_activation(prepared, {'PATH': 'tools', 'CONAN_HOME': 'conan'})
+        script = (self.tools / 'activate.ps1').read_text(encoding='utf-8-sig')
+        self.assertIn("$env:CONAN_OPENSSL_CONFIGURATION = 'mingw64'", script)
 
     def test_missing_or_partial_compiler_requires_normal_preparation(self):
         self.assertIsNone(setup.installed_windows_platform(self.config, {'PATH': ''}))

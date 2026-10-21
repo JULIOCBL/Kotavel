@@ -48,6 +48,29 @@ class ConsumerToolsTests(unittest.TestCase):
             '--project-root=' + str(self.root), 'kotavel://pos/home',
         ], {'PATH': ''})
 
+    def test_runtime_environment_loads_conan_paths_only_on_windows(self):
+        generators = self.root / 'build' / 'Release' / 'generators'
+        generators.mkdir(parents=True)
+        (generators / 'conanrunenv-release-x86_64.bat').write_text(
+            'set "QT_PLUGIN_PATH=C:\\qt\\plugins"\n'
+            'if defined PATH (\n'
+            '    set "PATH=C:\\qt\\bin;%PATH%"\n'
+            ') else (\n'
+            '    set "PATH=C:\\qt\\bin"\n'
+            ')\n'
+            'set "OPENSSL_MODULES=C:\\openssl\\modules"\n',
+            encoding='utf-8',
+        )
+        original = {'PATH': 'compiler;system'}
+        with patch.object(install, 'ROOT', self.root), patch.object(install.platform, 'system', return_value='Windows'):
+            windows = install.runtime_environment(original, 'Release')
+        self.assertEqual(windows['PATH'], 'C:\\qt\\bin;compiler;system')
+        self.assertEqual(windows['QT_PLUGIN_PATH'], 'C:\\qt\\plugins')
+        self.assertEqual(windows['OPENSSL_MODULES'], 'C:\\openssl\\modules')
+        with patch.object(install, 'ROOT', self.root), patch.object(install.platform, 'system', return_value='Darwin'):
+            macos = install.runtime_environment(original, 'Release')
+        self.assertEqual(macos, original)
+
     def test_process_failure_does_not_dump_python_command_repr(self):
         output = io.StringIO()
         failure = subprocess.CalledProcessError(1, ['kotavel-lab.exe', '--env=production'])

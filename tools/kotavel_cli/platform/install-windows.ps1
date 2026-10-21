@@ -34,4 +34,5 @@ if (-not $shell) { $shell = Get-Command powershell -ErrorAction Stop }
     compiler_bin = $compilerBin
     shell = @($shell.Source, '-NoLogo', '-NoProfile')
     activation_kind = 'powershell'
+    build_environment = $(if ($Compiler -eq 'clang') { @{ CONAN_OPENSSL_CONFIGURATION = 'mingw64' } } else { @{} })
 } | ConvertTo-Json | Set-Content -LiteralPath $Manifest -Encoding UTF8

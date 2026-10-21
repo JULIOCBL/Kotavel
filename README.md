@@ -84,6 +84,13 @@ del compilador de la plataforma. El ejecutable realiza una operación y termina 
 En macOS y Linux debes tener un compilador compatible con C++23 en el PATH.
 En Windows se necesita Python x64 y PowerShell; el instalador prepara LLVM-MinGW.
 La preparación reutiliza LLVM-MinGW instalado y los binarios nativos de CMake.
+En Windows, Conan usa una caché compartida en `%USERPROFILE%\\.k` para que las
+rutas generadas por Qt no excedan el límite de longitud de Windows.
+En Windows, el entorno generado selecciona `mingw64` para OpenSSL: LLVM-MinGW
+usa el ABI GNU y la receta de Conan selecciona Visual C++ por defecto para Clang.
+Esta configuración se conserva en `install`, `build`, `run` y la terminal activada.
+El perfil Windows compila las bibliotecas de OpenSSL sin su utilidad `openssl.exe`,
+que Kotavel no utiliza y cuya receta no incorpora todos los helpers de Clang/MinGW.
 Al repetir la preparación en Windows, las rutas de las herramientas locales
 se colocan al principio del PATH sin acumular copias, incluso con el entorno
 ya activo. Las demás entradas conservan su orden y contenido.

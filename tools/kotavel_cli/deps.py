@@ -5,11 +5,14 @@ from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import runpy
 import subprocess
 import sys
 import tempfile
+
+from .project_paths import conan_home
 
 ROOT = Path.cwd()
 TOOLS = ROOT / '.kotavel' / 'tools'
@@ -194,12 +197,13 @@ def prepare_environment(offline):
         raise RuntimeError('No se encontró Conan en el entorno local del proyecto.')
     manifest = json.loads((TOOLS / 'platform.json').read_text(encoding='utf-8-sig'))
     env = os.environ.copy()
+    env.update(manifest.get('build_environment', {}))
     paths = [str(scripts)]
     if manifest.get('compiler_bin'):
         paths.append(manifest['compiler_bin'])
     paths.append(env.get('PATH', ''))
     env['PATH'] = os.pathsep.join(paths)
-    env['CONAN_HOME'] = str(ROOT / '.kotavel' / 'conan')
+    env['CONAN_HOME'] = str(conan_home(ROOT, platform.system()))
     return conan, env
 
 

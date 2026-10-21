@@ -125,7 +125,7 @@ int main() {
     check(optional_form.validate() && optional_form.validated().empty(),
           "missing optional nullable fields should pass and stay out of validated input");
 
-    Request rule_data = json_request(R"({
+    std::string rule_payload = R"({
       "name":"Ada", "username":"ada_7", "code":"A7", "ascii":"plain",
       "lower":"plain", "upper":"LOUD", "email":"ada@example.com",
       "site":"https://example.com/path", "local_site":"http://localhost",
@@ -136,11 +136,21 @@ int main() {
       "start":"2026-01-01", "end":"2026-02-01", "role":"admin",
       "roles":["admin","editor"], "rows":[{"code":"row_1"},{"code":"row_2"}],
       "alternative":"ada_7", "settings":{"theme":"dark","locale":"es"},
-      "locale_date":"31/12/2026", "clock":"17:30:05", "zone":"America/Cancun",
-      "region_zone":"America/New_York", "encoding_text":"Mérida", "terms":"yes",
+      "locale_date":"31/12/2026", "clock":"17:30:05", "zone":"UTC",
+      "region_zone":"UTC", "encoding_text":"Mérida", "terms":"yes",
       "decline":"no", "acceptance":"yes", "declined_status":"no", "choices":["red","blue"],
       "choice":"blue"
-    })");
+    })";
+#if defined(_WIN32)
+    // Windows does not ship the IANA zoneinfo file tree used by this validator.
+    const auto replace_zone = [&](std::string_view old_zone) {
+        const auto offset = rule_payload.find(old_zone);
+        if (offset != std::string::npos) rule_payload.replace(offset, old_zone.size(), "UTC");
+    };
+    replace_zone("America/Cancun");
+    replace_zone("America/New_York");
+#endif
+    Request rule_data = json_request(rule_payload);
     RulesRequest scalar_rules(rule_data, {
         {"name", {"required", "alpha"}}, {"username", {"alpha_dash"}},
         {"code", {"alpha_num"}}, {"ascii", {"ascii"}}, {"lower", {"lowercase"}},
@@ -154,7 +164,12 @@ int main() {
         {"ends", {"ends_with:suffix", "doesnt_start_with:wrong"}},
         {"token", {"uuid"}}, {"ulid", {"ulid"}}, {"start", {"date", "date_format:Y-m-d", "date_equals:2026-01-01"}},
         {"locale_date", {"date_format:d/m/Y, Y-m-d"}}, {"clock", {"date_format:H:i:s"}},
-        {"zone", {"timezone"}}, {"region_zone", {"timezone:America"}},
+        {"zone", {"timezone"}},
+#if defined(_WIN32)
+        {"region_zone", {"timezone"}},
+#else
+        {"region_zone", {"timezone:America"}},
+#endif
         {"encoding_text", {"encoding:utf-8"}},
         {"end", {"date", "after:start", "after_or_equal:start", "before:2027-01-01",
                  "before_or_equal:2027-01-01"}},

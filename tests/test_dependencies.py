@@ -1,17 +1,16 @@
 """Exercise dependency transactions without downloading packages."""
-import importlib.util
 import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-spec = importlib.util.spec_from_file_location('kotavel_deps', Path(__file__).resolve().parents[1] / 'tools' / 'kotavel_cli' / 'deps.py')
-deps = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(deps)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from tools.kotavel_cli import deps
 BASE = 'from conan import ConanFile\nclass Project(ConanFile):\n    requires = ("spdlog/1.15.3",)\n'
 FMT = '\n    def requirements(self):\n        self.requires("fmt/[>=11.2.0 <12]")\n'
 NEW_LOCK = json.dumps({'version': '0.5', 'requires': ['fmt/11.2.0']}).encode()
@@ -155,11 +154,20 @@ class DependencyTests(unittest.TestCase):
             binary = self.root / 'python' / directory / executable
             binary.parent.mkdir(parents=True, exist_ok=True)
             binary.touch()
-            (self.root / 'platform.json').write_text(json.dumps({'compiler_bin': 'compiler'}), encoding='utf-8-sig')
+            build_environment = {'CONAN_OPENSSL_CONFIGURATION': 'mingw64'} if system == 'nt' else {}
+            (self.root / 'platform.json').write_text(json.dumps({
+                'compiler_bin': 'compiler', 'build_environment': build_environment,
+            }), encoding='utf-8-sig')
             platform_os = SimpleNamespace(name=system, environ={'PATH': 'original'}, pathsep=separator)
-            with patch.object(deps, 'os', platform_os), patch.object(deps, 'execute') as run:
+            platform_name = 'Windows' if system == 'nt' else 'Linux'
+            with patch.object(deps, 'os', platform_os), patch.object(deps.platform, 'system', return_value=platform_name), patch.object(deps, 'execute') as run:
                 conan, env = deps.prepare_environment(True)
             self.assertEqual(conan, binary)
             self.assertEqual(env['PATH'], separator.join((str(binary.parent), 'compiler', 'original')))
-            self.assertEqual(env['CONAN_HOME'], str(self.root / '.kotavel/conan'))
+            expected_home = Path.home() / '.k' if system == 'nt' else self.root / '.kotavel/conan'
+            self.assertEqual(env['CONAN_HOME'], str(expected_home))
+            if system == 'nt':
+                self.assertEqual(env['CONAN_OPENSSL_CONFIGURATION'], 'mingw64')
+            else:
+                self.assertNotIn('CONAN_OPENSSL_CONFIGURATION', env)
             self.assertIn('--configure-only', run.call_args.args[0])

@@ -16,6 +16,11 @@ import sys
 import sysconfig
 import venv
 
+try:
+    from .project_paths import conan_home
+except ImportError:  # install.py also runs directly as a preparation subprocess.
+    from project_paths import conan_home
+
 # Load by file path as tests and other callers can import this script directly.
 _posix_spec = importlib.util.spec_from_file_location('kotavel_posix', Path(__file__).with_name('posix_environment.py'))
 _posix = importlib.util.module_from_spec(_posix_spec)
@@ -25,7 +30,7 @@ ROOT = Path.cwd()
 PLATFORM = Path(__file__).resolve().parent / "platform"
 DEFAULT_PROFILES = Path(__file__).resolve().parent / "templates" / "application" / "profiles"
 TOOLS = ROOT / '.kotavel' / 'tools'
-CONAN_HOME = ROOT / '.kotavel' / 'conan'
+CONAN_HOME = conan_home(ROOT, platform.system())
 SYSTEMS = {'Windows': ('windows', 'Windows'), 'Linux': ('linux', 'Linux'), 'Darwin': ('macos', 'Macos')}
 
 
@@ -117,6 +122,7 @@ def installed_windows_platform(config, env):
         'scripts_directory': 'Scripts', 'python_executable': 'python.exe',
         'compiler_bin': str(toolchain / 'bin'),
         'shell': [shell, '-NoLogo', '-NoProfile'], 'activation_kind': 'powershell',
+        'build_environment': {'CONAN_OPENSSL_CONFIGURATION': 'mingw64'},
     }
 
 
@@ -193,6 +199,8 @@ def write_activation(prepared, env):
     if prepared['activation_kind'] == 'powershell':
         quote = lambda value: "'" + value.replace("'", "''") + "'"
         script = '$env:PATH = ' + quote(env['PATH']) + '\n$env:CONAN_HOME = ' + quote(str(CONAN_HOME)) + '\n'
+        for name, value in prepared.get('build_environment', {}).items():
+            script += '$env:' + name + ' = ' + quote(value) + '\n'
         write_if_changed(TOOLS / 'activate.ps1', script, encoding='utf-8-sig')
     else:
         script = 'export PATH=' + shlex.quote(env['PATH']) + '\nexport CONAN_HOME=' + shlex.quote(str(CONAN_HOME)) + '\n'
@@ -258,7 +266,33 @@ def project_executable_path(build_type, name, system):
     return next((path for path in candidates if path.is_file()), candidates[0])
 
 
-def run_application(executable, environment, deep_link, env):
+def runtime_environment(env, build_type):
+    """Add Conan's generated runtime DLL paths on Windows, leaving POSIX untouched."""
+    runtime_env = dict(env)
+    if platform.system() != 'Windows':
+        return runtime_env
+    generators = ROOT / 'build' / build_type / 'generators'
+    scripts = sorted(generators.glob('conanrunenv-*.bat'))
+    if not scripts:
+        return runtime_env
+    path_updated = False
+    for line in scripts[0].read_text(encoding='utf-8-sig').splitlines():
+        match = re.fullmatch(r'\s*set\s+"(QT_PLUGIN_PATH|OPENSSL_MODULES|PATH)=(.*)"\s*', line, re.IGNORECASE)
+        if not match:
+            continue
+        name, value = match.group(1).upper(), match.group(2)
+        if name == 'PATH':
+            if path_updated:
+                continue
+            value = re.sub(r'%PATH%', lambda _: runtime_env.get('PATH', ''), value, flags=re.IGNORECASE)
+            runtime_env['PATH'] = value
+            path_updated = True
+        else:
+            runtime_env[name] = value
+    return runtime_env
+
+
+def run_application(executable, environment, deep_link, env, build_type='Debug'):
     """Ejecuta el consumidor con el entorno elegido y, opcionalmente, una URI desktop."""
     executable = Path(executable)
     if platform.system() == 'Darwin' and executable.suffix == '.app':
@@ -269,7 +303,7 @@ def run_application(executable, environment, deep_link, env):
     if deep_link:
         # DesktopKernel valida el esquema configurado y resuelve la ruta registrada.
         command.append(deep_link)
-    run(command, env)
+    run(command, runtime_environment(env, build_type))
 
 
 def profile_label(path):
@@ -344,7 +378,7 @@ def main(argv=None):
     if args.project is not None:
         ROOT = args.project.resolve()
         TOOLS = ROOT / '.kotavel' / 'tools'
-        CONAN_HOME = ROOT / '.kotavel' / 'conan'
+        CONAN_HOME = conan_home(ROOT, platform.system())
     if not (ROOT / 'conanfile.py').is_file():
         raise RuntimeError(f'No se encontró conanfile.py en {ROOT}')
     framework_source = None
@@ -373,6 +407,7 @@ def main(argv=None):
     env = os.environ.copy()
     env['CONAN_HOME'] = str(CONAN_HOME)
     prepared = prepare_platform(system, config, env, args.configure_only)
+    env.update(prepared.get('build_environment', {}))
     scripts = TOOLS / 'python' / prepared['scripts_directory']
     python = scripts / prepared['python_executable']
     prepend_tools_path(env, scripts, system)
@@ -415,7 +450,7 @@ def main(argv=None):
             executable = project_executable_path(build_type, name, system)
             if not executable.exists():
                 raise RuntimeError(f'No se encontró el ejecutable generado: {executable}')
-            run_application(executable, environment, args.deep_link, env)
+            run_application(executable, environment, args.deep_link, env, build_type)
     if args.test and not args.build and not args.run:
         if framework_source is not None:
             test_framework(framework_source, build_type, config, python, env)

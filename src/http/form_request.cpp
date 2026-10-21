@@ -277,6 +277,14 @@ bool valid_url(std::string_view value) {
 }
 
 bool resolves_host(std::string_view host) {
+#if defined(_WIN32)
+    // Winsock requires process initialization before getaddrinfo can be used.
+    static const bool winsock_ready = [] {
+        WSADATA data{};
+        return WSAStartup(MAKEWORD(2, 2), &data) == 0;
+    }();
+    if (!winsock_ready) return false;
+#endif
     const std::string name(host);
     addrinfo hints{};
     hints.ai_socktype = SOCK_STREAM;
