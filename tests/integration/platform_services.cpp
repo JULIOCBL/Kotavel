@@ -52,7 +52,9 @@ void check_system_paths(const kotavel::contracts::SystemPaths& paths) {
 
     require(config.is_absolute() && data.is_absolute() && cache.is_absolute(),
             "System paths must be absolute");
-    require(config.filename() == app && data.filename() == app && cache.filename() == app,
+    const auto expected_cache_name = kotavel::OS::isWindows() ? "Cache" : app;
+    require(config.filename() == app && data.filename() == app &&
+                cache.filename() == expected_cache_name,
             "System paths must end in the requested application directory");
 
     if (kotavel::OS::isMac()) {

@@ -18,6 +18,8 @@ make_process_metrics_provider();
 [[nodiscard]] std::unique_ptr<contracts::RuntimePathResolver>
 make_runtime_path_resolver();
 
+void configure_console_output() noexcept;
+
 [[nodiscard]] std::unique_ptr<ServiceProvider> make_platform_service_provider();
 
 } // namespace kotavel::platform::detail

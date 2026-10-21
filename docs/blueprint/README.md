@@ -52,13 +52,21 @@ El diagrama muestra relaciones conceptuales. Los adaptadores implementarían con
 ### Frontera de plataforma en el núcleo
 
 Las diferencias del sistema operativo pertenecen a contratos pequeños de
-`include/kotavel/contracts/` y a implementaciones bajo `src/platform/`. CMake
+`include/kotavel/contracts/` y a implementaciones bajo
+`src/platform/<módulo>/<plataforma>/`. CMake
 elige una implementación nativa por plataforma; el bootstrap la registra como
 provider predeterminado. Los providers de la aplicación se registran antes y
 pueden reemplazar esos defaults. El núcleo consume el contrato y no incluye
 headers de Windows, POSIX, macOS ni Linux. Esta regla aplica al interior de
 Kotavel; no obliga a las aplicaciones consumidoras a adoptar los adaptadores
 internos ni cambia sus APIs.
+
+La organización física agrupa primero por capacidad (`console`, `metrics`,
+`networking`, `paths`, etc.) y luego por sistema (`windows`, `macos`, `linux` o
+`posix` para implementaciones compartidas). Por ejemplo,
+`src/platform/console/windows/console_output.cpp` contiene la salida UTF-8 de
+Windows, mientras `src/platform/console/posix/console_output.cpp` implementa el
+caso compartido POSIX.
 
 Las fronteras implementadas incluyen `ProcessMetricsProvider`, que deja el
 cálculo común de porcentajes separado de la lectura nativa; `SystemPaths`, que

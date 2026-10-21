@@ -24,6 +24,11 @@ class ConsumerToolsTests(unittest.TestCase):
             self.assertEqual(cli.main(['--project', str(self.root), 'install', 'add', 'fmt/11.2.0', '--offline']), 0)
         command.assert_called_once_with(['add', 'fmt/11.2.0', '--offline', '--project', str(self.root.resolve())])
 
+    def test_help_keeps_the_python3_command_name(self):
+        help_text = cli.CommandHelpParser().format_help()
+        self.assertIn('python3 kotavel.py test --framework', help_text)
+        self.assertIn('python3 kotavel.py install --reset', help_text)
+
     def test_build_test_and_run_dispatch_to_consumer(self):
         for name, flag in (('build', '--build'), ('test', '--test'), ('run', '--run')):
             with self.subTest(name=name), patch.object(install, 'main') as command:

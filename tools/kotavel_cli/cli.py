@@ -35,6 +35,7 @@ class CommandHelpParser(argparse.ArgumentParser):
         lines.extend(['', paint('Variantes:', '1;36')])
         for command, description in [
             ('install add nombre/version', 'Añade una dependencia sin duplicarla.'),
+            ('install --reset', 'Elimina .kotavel local y reinstala desde cero.'),
             ('run --env=local', 'Carga .env.local y ejecuta la aplicación.'),
             ('run --env=development', 'Carga .env.development y ejecuta.'),
             ('run --env=production', 'Carga .env (opción predeterminada).'),
@@ -57,6 +58,7 @@ class CommandHelpParser(argparse.ArgumentParser):
         lines.extend(['', paint('Ejemplos:', '1;36'),
                       '  ' + paint('python3 kotavel.py test --framework', '33'),
                       '  ' + paint('python3 kotavel.py install add nombre/version', '33'),
+                      '  ' + paint('python3 kotavel.py install --reset', '33'),
                       '  ' + paint('python3 kotavel.py <comando> --help', '33'), ''])
         return '\n'.join(lines)
 

@@ -91,6 +91,7 @@ class MacOSAdapterTests(unittest.TestCase):
             tool.touch()
             self.assertEqual(self.adapter.macdeployqt(Path('/tmp/project'), cache), tool)
 
+    @unittest.skipIf(os.name == 'nt', 'macOS PATH semantics are validated on macOS runners')
     def test_macos_activation_is_repeatable_and_does_not_duplicate_path(self):
         with tempfile.TemporaryDirectory() as directory:
             tools = Path(directory)

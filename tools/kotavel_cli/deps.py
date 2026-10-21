@@ -2,11 +2,15 @@
 import argparse
 import ast
 from contextlib import contextmanager
+import ctypes
+import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import runpy
+import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -85,14 +89,23 @@ def project_dependencies(source):
 
 @contextmanager
 def project_guard():
-    """OS locks are released even if the process exits unexpectedly."""
-    TOOLS.mkdir(parents=True, exist_ok=True)
-    with (TOOLS / 'deps.guard').open('a+b') as stream:
+    """Serialize dependency operations outside the resettable project directory."""
+    lock_root = Path.home() / '.kotavel' / 'locks'
+    if os.name == 'nt':
+        lock_root = Path.home() / '.k' / 'locks'
+    lock_root.mkdir(parents=True, exist_ok=True)
+    identity = os.path.normcase(str(ROOT.resolve())).encode('utf-8')
+    lock_name = hashlib.sha256(identity).hexdigest() + '.guard'
+    with (lock_root / lock_name).open('a+b') as stream:
+        lock = get_platform().lock_project(stream)
         try:
-            with get_platform().lock_project(stream):
-                yield
+            lock.__enter__()
         except OSError as error:
             raise RuntimeError('Otro comando install está trabajando en este proyecto; espera a que termine.') from error
+        try:
+            yield
+        finally:
+            lock.__exit__(None, None, None)
 
 
 def execute(command, env):
@@ -126,6 +139,44 @@ def atomic_write(path, content):
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def reset_project_environment(project_root):
+    """Remove only the consumer-local Kotavel tools and generated metadata."""
+    directory = Path(project_root) / '.kotavel'
+    if directory.is_symlink() or not directory.is_dir():
+        directory.unlink(missing_ok=True)
+    else:
+        def handle_remove_error(function, path, error_info):
+            if os.name == 'nt' and function is os.unlink:
+                basename = os.path.basename(path).split('.', 1)[0].upper()
+                devices = {'CON', 'PRN', 'AUX', 'NUL', *(f'COM{i}' for i in range(1, 10)),
+                           *(f'LPT{i}' for i in range(1, 10))}
+                if basename in devices:
+                    separator = chr(92)
+                    extended_prefix = separator * 2 + '?' + separator
+                    if path.startswith(extended_prefix):
+                        extended = path
+                    else:
+                        absolute = path if os.path.isabs(path) else os.path.join(os.getcwd(), path)
+                        extended = (extended_prefix + 'UNC' + separator + absolute[2:]
+                                    if absolute.startswith(separator * 2) else extended_prefix + absolute)
+                    delete_file = ctypes.WinDLL('kernel32', use_last_error=True).DeleteFileW
+                    delete_file.argtypes = [ctypes.c_wchar_p]
+                    delete_file.restype = ctypes.c_int
+                    if delete_file(extended):
+                        return
+                    raise ctypes.WinError(ctypes.get_last_error())
+            error = error_info[1]
+            if error is None:
+                return
+            os.chmod(path, stat.S_IWRITE)
+            function(path)
+
+        target = str(directory)
+        if os.name == 'nt':
+            target = '\\\\?\\' + os.path.abspath(target)
+        shutil.rmtree(target, onerror=handle_remove_error)
 
 
 def add_dependency(reference, conan, env, offline=False):
@@ -199,6 +250,8 @@ def main(argv=None):
     parser.add_argument('action', nargs='?', default='install', choices=['install', 'add'])
     parser.add_argument('dependency', nargs='?', help='Nombre o nombre/versión de Conan')
     parser.add_argument('--offline', action='store_true', help='Utiliza solo herramientas y paquetes de la caché local')
+    parser.add_argument('--reset', action='store_true',
+                        help='Elimina .kotavel local y reinstala herramientas y dependencias')
     args = parser.parse_args(argv)
     if args.project is not None:
         ROOT = args.project.resolve()
@@ -209,7 +262,13 @@ def main(argv=None):
         validate_reference(args.dependency)
     elif args.dependency:
         parser.error('install no recibe una dependencia; instala todas las declaradas.')
+    if args.reset and args.action != 'install':
+        parser.error('--reset solo se utiliza con install, no con add')
+    if args.reset and args.offline:
+        parser.error('--reset requiere reinstalar las herramientas; no se puede combinar con --offline')
     with project_guard():
+        if args.reset:
+            reset_project_environment(ROOT)
         if args.action == 'add':
             declared_dependencies((ROOT / 'conanfile.py').read_text(encoding='utf-8-sig'))
         conan, env = prepare_environment(args.offline)

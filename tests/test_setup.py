@@ -104,6 +104,8 @@ class WindowsOptimizationTests(unittest.TestCase):
             self.assertEqual(env['PATH'], 'C:\\Tools\\bin;C:\\Other;;C:\\Other')
 
     def test_posix_path_removes_repeated_tools_directory(self):
+        if os.name == 'nt':
+            self.skipTest('POSIX PATH semantics are validated on POSIX runners')
         for system in ('Darwin', 'Linux'):
             with self.subTest(system=system):
                 env = {'PATH': os.pathsep.join(['/usr/bin', '/tools'])}

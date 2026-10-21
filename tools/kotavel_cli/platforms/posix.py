@@ -5,7 +5,6 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
-import fcntl
 from contextlib import contextmanager
 
 from .base import PlatformAdapter
@@ -58,6 +57,8 @@ class PosixPlatform(PlatformAdapter):
 
     @contextmanager
     def lock_project(self, stream):
+        import fcntl
+
         fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         try:
             yield

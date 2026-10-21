@@ -148,6 +148,41 @@ class DependencyTests(unittest.TestCase):
         with deps.project_guard():
             pass
 
+    def test_guard_does_not_report_install_errors_as_lock_contention(self):
+        with self.assertRaisesRegex(PermissionError, 'acceso denegado'):
+            with deps.project_guard():
+                raise PermissionError('acceso denegado')
+
+    def test_reset_install_removes_local_state_then_installs_again(self):
+        project = self.root / 'consumer'
+        local = project / '.kotavel'
+        local.mkdir(parents=True)
+        (local / 'stale-tool').write_text('stale')
+        build = project / 'build'
+        build.mkdir()
+        (build / 'keep.txt').write_text('preserve')
+        shared_cache = self.root / 'shared-conan'
+        shared_cache.mkdir()
+        (shared_cache / 'keep.txt').write_text('preserve')
+
+        def prepare(offline):
+            self.assertFalse(local.exists())
+            local.mkdir()
+            return 'conan', {}
+
+        with patch.object(deps, 'prepare_environment', side_effect=prepare), patch.object(
+                deps, 'add_dependency') as install:
+            deps.main(['--project', str(project), '--reset'])
+
+        install.assert_called_once_with(None, 'conan', {}, False)
+        self.assertEqual((build / 'keep.txt').read_text(), 'preserve')
+        self.assertEqual((shared_cache / 'keep.txt').read_text(), 'preserve')
+
+    def test_reset_rejects_offline_mode(self):
+        with patch('sys.stderr') as error_output, self.assertRaises(SystemExit) as failure:
+            deps.main(['--project', str(self.root), '--reset', '--offline'])
+        self.assertEqual(failure.exception.code, 2)
+
     def test_platform_environment_and_offline_preparation(self):
         for system, directory, executable, separator in (
                 ('nt', 'Scripts', 'conan.exe', ';'), ('posix', 'bin', 'conan', ':')):

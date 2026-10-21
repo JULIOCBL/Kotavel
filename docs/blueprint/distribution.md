@@ -152,8 +152,9 @@ Hay tres ajustes importantes:
    es una separación conceptual útil, pero en Kotavel las cabeceras públicas
    van bajo `include/kotavel/` y el código compilado bajo `src/`. Por eso la
    forma concreta debe ser `include/kotavel/contracts/` y
-   `src/platform/{windows,linux,macos}/`, junto con `src/platform/posix/` para
-   código común POSIX.
+   `src/platform/<módulo>/{windows,linux,macos,posix}/`, agrupando primero por
+   capacidad (por ejemplo, `console`, `paths` o `networking`) y después por
+   sistema operativo. `posix/` contiene implementaciones compartidas.
 2. **La carpeta `domain/` no se agrega por defecto:** Kotavel es un framework;
    “dominio” puede confundirse con el dominio de negocio de cada aplicación.
    Solo se justifica si aparecen tipos o reglas estables del framework que no
@@ -184,10 +185,14 @@ Kotavel/
 │   ├── container/                 Registro y resolución de servicios
 │   ├── diagnostics/                Errores y logging
 │   ├── platform/
-│   │   ├── windows/               Adaptadores Windows
-│   │   ├── linux/                 Adaptadores Linux
-│   │   ├── macos/                 Adaptadores macOS
-│   │   └── posix/                 Implementación compartida POSIX
+│   │   ├── console/{windows,posix}/ Salida de consola
+│   │   ├── diagnostics/{windows,posix}/ Diagnóstico nativo
+│   │   ├── metrics/{windows,macos,linux,posix}/ Métricas y transporte
+│   │   ├── networking/{windows,macos,linux,posix}/ Red y señales
+│   │   ├── paths/{windows,macos,linux}/ Rutas del sistema y runtime
+│   │   ├── application/{windows,macos,linux}/ Bundle de aplicación
+│   │   ├── system/{windows,macos,linux}/ Identificación del sistema
+│   │   └── time/{windows,posix}/ Tiempo UTC
 │   ├── http/ console/ desktop/     Implementaciones de módulos
 │   └── ...
 ├── cmake/
@@ -213,7 +218,7 @@ Remote y su caché reemplazan las carpetas `packages/<plataforma>/<biblioteca>`.
 ```text
 Kotavel/
 ├── include/kotavel/             Contratos y API C++ pública
-├── src/platform/{windows,linux,macos}/ Implementaciones nativas
+├── src/platform/<módulo>/<plataforma>/ Adaptadores nativos por capacidad
 ├── cmake/                       Selección central de plataforma
 ├── tools/kotavel_cli/           Comandos Python de desarrollo
 ├── conanfile.py                 Dependencias del framework

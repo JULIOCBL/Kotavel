@@ -1,5 +1,9 @@
 # Kotavel
 
+Los comandos de esta guía y de `docs/` conservan el mismo nombre en los tres
+sistemas: `python3 kotavel.py ...`. Si Windows no reconoce `python3`, configura
+PowerShell como se indica en el README del Laboratorio.
+
 Creado por **Julio Cesar Borges Lopez**. Distribuido bajo la [licencia MIT](LICENSE).
 
 Framework C++23 en desarrollo. `Kotavel::Core` es una biblioteca estática con
@@ -25,6 +29,7 @@ binarios está en [Distribución y dependencias](docs/blueprint/distribution.md)
 ```text
 include/kotavel/   Interfaces públicas del núcleo, HTTP opcional y deep links
 src/              Implementación del núcleo y módulos
+src/platform/<módulo>/<plataforma>/ Adaptadores nativos organizados por capacidad
 resources/messages/ Catálogos JSON de mensajes internos por módulo
 assets/branding/  Logotipo, símbolo e icono predeterminados de Kotavel
 CMakeLists.txt    Target público e instalación
@@ -76,12 +81,21 @@ no detecta plataformas con macros del compilador.
 ## Utilizar desde el Laboratorio
 
 Coloca Laboratory-Kotavel junto a este repositorio. Su `kotavel.json` debe
-seleccionar `mode: local` y `source_dir: ../Kotavel`. Desde el Laboratorio:
+seleccionar `mode: local` y `source_dir: ../Kotavel`. En todos los sistemas,
+ejecuta los comandos desde la raíz del Laboratorio con `python3`:
 
 ```sh
 python3 kotavel.py install
 python3 kotavel.py run
 ```
+
+```powershell
+python3 kotavel.py install
+python3 kotavel.py run
+```
+
+Para eliminar el entorno local `.kotavel` y reinstalarlo desde cero, ejecuta
+`python3 kotavel.py install --reset`. La caché compartida de Conan se conserva.
 
 La preparación necesita Python 3.9 o posterior con pip y venv y los requisitos
 del compilador de la plataforma. El ejecutable realiza una operación y termina ordenadamente.
@@ -110,11 +124,17 @@ en el PATH. El perfil conserva C++23 y detecta x86_64 o ARM64.
 
 ## Empaquetar la base
 
-Desde el Laboratorio, abre su entorno local y crea el paquete:
+Desde el Laboratorio, abre su entorno local y crea el paquete con `python3`:
 
 ```sh
 python3 kotavel.py shell
 conan create ../Kotavel --build=missing
+exit
+```
+
+```powershell
+python3 kotavel.py shell
+conan create ..\Kotavel --build=missing
 exit
 ```
 
@@ -154,6 +174,8 @@ Desde un entorno virtual activo puedes instalarlo desde la raíz de Kotavel:
 python3 -m pip install .
 ```
 
+En Windows PowerShell, usa `python3 -m pip install .`.
+
 `tools_version` fija su versión independientemente del paquete Conan. No hay
 publicación en un índice Python ni generador de proyectos nuevos todavía.
 Los perfiles propios del consumidor tienen prioridad sobre los predeterminados
@@ -186,4 +208,6 @@ Para ejecutar las pruebas de estas herramientas desde Kotavel:
 ```sh
 python3 -m unittest discover -s tests -p "test_*.py"
 ```
+
+En Windows PowerShell, ejecuta `python3 -m unittest discover -s tests -p "test_*.py"`.
 

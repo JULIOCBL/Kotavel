@@ -6,6 +6,8 @@ Desde la raíz de Kotavel:
 python3 -m unittest discover -s tests -p "test_*.py"
 ```
 
+En Windows PowerShell, usa `python3 -m unittest discover -s tests -p "test_*.py"`.
+
 Verifican perfiles y preparadores de Windows/Linux/macOS, reutilización de
 herramientas, ejecución configurable, despacho de comandos a un consumidor,
 dependencias duplicadas, recuperación ante errores y bloqueo entre ejecuciones.
@@ -57,6 +59,12 @@ ubicaciones macOS, XDG/Linux y Windows según el adaptador compilado, y rechaza
 nombres de aplicación vacíos, anidados o con traversal. La matriz nativa debe
 ejecutarla en cada sistema para validar sus respectivos adaptadores.
 
+Los adaptadores de plataforma se organizan como
+`src/platform/<módulo>/<plataforma>/`; por ejemplo,
+`src/platform/console/windows/` y `src/platform/console/posix/`. CMake selecciona
+las fuentes nativas de cada sistema y reutiliza las implementaciones POSIX donde
+corresponde.
+
 Desde un consumidor configurado en modo local, `python3 kotavel.py test --framework`
 ejecuta una comprobación completa: pruebas Python del framework y del consumidor,
 compilación y pruebas del núcleo, y compilación y pruebas de integración del
@@ -65,6 +73,12 @@ consumidor con Conan. Se detiene al primer fallo. Requiere las suites
 seleccionado del consumidor; guarda el núcleo en `build/framework-tests/<Debug|Release>`
 y el consumidor en `build/<Debug|Release>`. `--build-type Release` cambia el tipo
 de compilación; `test` sin `--framework` conserva la ejecución de CTest existente.
+En Windows PowerShell, ejecuta el mismo flujo con `python3 kotavel.py test --framework`.
+
+Para comprobar una reinstalación limpia de herramientas y dependencias, ejecuta
+`python3 kotavel.py install --reset` desde la raíz del consumidor. El comando
+borra `.kotavel` del proyecto y vuelve a ejecutar la instalación; conserva la
+caché compartida de Conan.
 
 `.github/workflows/core.yml` prepara Debug/Release en Windows, Linux y macOS,
 además de ASan/UBSan y TSan en trabajos separados de Linux. La matriz no demuestra

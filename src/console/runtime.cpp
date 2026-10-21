@@ -71,6 +71,7 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
                 const ExecuteConsole& execute, std::string_view application_help,
                 const LoadConsoleConfig& load_config,
                 const CreateServiceProviders& create_providers) {
+    platform::detail::configure_console_output();
     using Clock = std::chrono::steady_clock;
     const auto run_started = Clock::now();
     bool debug = false;
