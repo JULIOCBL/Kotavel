@@ -23,7 +23,10 @@ jobs:
           python -m pip install --disable-pip-version-check "conan>=2,<3"
           conan profile detect --force
           conan install . --build=missing -s:h build_type=${{ matrix.build }} -s:b build_type=${{ matrix.build }}
-      - run: cmake -S . -B build/ci -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/build/${{ matrix.build }}/generators/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=${{ matrix.build }} -DKOTAVEL_BUILD_TESTS=ON
+      - name: Locate Conan toolchain
+        run: >-
+          python -c "import os; from pathlib import Path; files = list(Path('build').rglob('conan_toolchain.cmake')); assert len(files) == 1, f'Expected one Conan toolchain, found: {files}'; open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8').write('KOTAVEL_CONAN_TOOLCHAIN=' + str(files[0].resolve()) + os.linesep)"
+      - run: cmake -S . -B build/ci "-DCMAKE_TOOLCHAIN_FILE=${{ env.KOTAVEL_CONAN_TOOLCHAIN }}" -DCMAKE_BUILD_TYPE=${{ matrix.build }} -DKOTAVEL_BUILD_TESTS=ON
       - run: cmake --build build/ci --config ${{ matrix.build }} --parallel 2
       - run: ctest --test-dir build/ci -C ${{ matrix.build }} --output-on-failure
   sanitizers:
@@ -44,9 +47,12 @@ jobs:
           python -m pip install --disable-pip-version-check "conan>=2,<3"
           conan profile detect --force
           conan install . --build=missing -s:h build_type=Debug -s:b build_type=Debug
+      - name: Locate Conan toolchain
+        run: >-
+          python -c "import os; from pathlib import Path; files = list(Path('build').rglob('conan_toolchain.cmake')); assert len(files) == 1, f'Expected one Conan toolchain, found: {files}'; open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8').write('KOTAVEL_CONAN_TOOLCHAIN=' + str(files[0].resolve()) + os.linesep)"
       - run: >-
           cmake -S . -B build/sanitizers
-          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/build/Debug/generators/conan_toolchain.cmake
+          "-DCMAKE_TOOLCHAIN_FILE=${{ env.KOTAVEL_CONAN_TOOLCHAIN }}"
           -DCMAKE_BUILD_TYPE=Debug
           -DCMAKE_CXX_FLAGS="-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer -Wall -Wextra -Wpedantic"
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=${{ matrix.sanitizer }}"
