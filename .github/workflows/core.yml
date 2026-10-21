@@ -14,8 +14,16 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - run: python3 -m unittest discover -s tests -p "test_*.py"
-      - run: cmake -S . -B build/ci -DCMAKE_BUILD_TYPE=${{ matrix.build }} -DKOTAVEL_BUILD_TESTS=ON
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests -p "test_*.py"
+      - name: Install framework dependencies
+        run: |
+          python -m pip install --disable-pip-version-check "conan>=2,<3"
+          conan profile detect --force
+          conan install . --output-folder=build/conan --build=missing -s:h build_type=${{ matrix.build }} -s:b build_type=${{ matrix.build }}
+      - run: cmake -S . -B build/ci -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/build/conan/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=${{ matrix.build }} -DKOTAVEL_BUILD_TESTS=ON
       - run: cmake --build build/ci --config ${{ matrix.build }} --parallel 2
       - run: ctest --test-dir build/ci -C ${{ matrix.build }} --output-on-failure
   sanitizers:
@@ -28,8 +36,18 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install framework dependencies
+        run: |
+          python -m pip install --disable-pip-version-check "conan>=2,<3"
+          conan profile detect --force
+          conan install . --output-folder=build/conan --build=missing -s:h build_type=Debug -s:b build_type=Debug
       - run: >-
-          cmake -S . -B build/sanitizers -DCMAKE_BUILD_TYPE=Debug
+          cmake -S . -B build/sanitizers
+          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/build/conan/conan_toolchain.cmake
+          -DCMAKE_BUILD_TYPE=Debug
           -DCMAKE_CXX_FLAGS="-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer -Wall -Wextra -Wpedantic"
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=${{ matrix.sanitizer }}"
       - run: cmake --build build/sanitizers --parallel 2
