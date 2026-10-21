@@ -15,6 +15,16 @@ using namespace std::chrono_literals;
 using kotavel::metrics::MetricsMonitor;
 using kotavel::metrics::ProcessMetricsCollector;
 
+class FixedMetricsProvider final : public kotavel::contracts::ProcessMetricsProvider {
+public:
+    mutable std::size_t reads = 0;
+    std::optional<kotavel::contracts::ProcessMetricsSnapshot> read() const noexcept override {
+        ++reads;
+        return kotavel::contracts::ProcessMetricsSnapshot{
+            std::chrono::milliseconds(25 * static_cast<int>(reads)), 1024 * reads};
+    }
+};
+
 void check(bool condition, const char* message) {
     if (!condition) throw std::runtime_error(message);
 }
@@ -45,6 +55,22 @@ void check_process_sample_contract() {
     check(second->process_cpu_percent.has_value(), "Second CPU sample must be present");
     check(std::isfinite(*second->process_cpu_percent) && *second->process_cpu_percent >= 0.0,
           "CPU percentage must be finite and non-negative");
+}
+
+void check_process_metrics_provider_contract() {
+    auto provider = std::make_shared<FixedMetricsProvider>();
+    ProcessMetricsCollector collector(provider);
+    const auto first = collector.sample();
+    const auto second = collector.sample();
+    check(first && second, "Injected process metrics provider did not produce samples");
+    check(provider->reads == 2, "Collector did not delegate both reads to its provider");
+    check(first->resident_memory_bytes == 1024 && second->resident_memory_bytes == 2048,
+          "Collector did not preserve provider memory readings");
+    check(second->process_cpu_percent.has_value(),
+          "Collector did not derive CPU percentage from provider snapshots");
+    expect_exception<std::invalid_argument>(
+        [] { ProcessMetricsCollector invalid(nullptr); },
+        "Collector accepted a null platform provider");
 }
 
 void check_monitor_validation() {
@@ -156,6 +182,7 @@ void check_stop_from_callback() {
 int main() {
     try {
         check_process_sample_contract();
+        check_process_metrics_provider_contract();
         check_monitor_validation();
         check_monitor_callback_and_shutdown();
         check_stop_from_callback();

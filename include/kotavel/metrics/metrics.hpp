@@ -11,6 +11,8 @@
 #include <optional>
 #include <thread>
 
+#include <kotavel/contracts/process_metrics_provider.hpp>
+
 namespace kotavel::metrics {
 
 // CPU se expresa como porcentaje de un núcleo; puede superar 100 % en varios núcleos.
@@ -45,8 +47,17 @@ private:
 // Una instancia mide el proceso completo y solo debe consultarse desde un hilo.
 class ProcessMetricsCollector final {
 public:
+    // Usa el adaptador nativo seleccionado durante la compilación.
+    ProcessMetricsCollector();
+    // Permite inyectar otra implementación sin acoplar el recolector a una plataforma.
+    explicit ProcessMetricsCollector(
+        const contracts::ProcessMetricsProvider& provider);
+    explicit ProcessMetricsCollector(
+        std::shared_ptr<const contracts::ProcessMetricsProvider> provider);
     [[nodiscard]] std::optional<MetricsSample> sample() noexcept;
 private:
+    std::shared_ptr<const contracts::ProcessMetricsProvider> owned_provider_;
+    const contracts::ProcessMetricsProvider* provider_ = nullptr;
     std::optional<std::chrono::nanoseconds> previous_cpu_time_;
     std::optional<std::chrono::steady_clock::time_point> previous_wall_time_;
 };

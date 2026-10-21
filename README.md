@@ -19,6 +19,8 @@ almacenamiento, carga, coste de operaciones y reglas de concurrencia.
 El [blueprint propuesto de Kotavel](docs/blueprint/README.md) define la estructura,
 las etapas de implementación y los criterios de rendimiento del framework. Los [microbenchmarks](benchmarks/README.md)
 permiten reproducir las primeras mediciones del núcleo.
+El análisis de las cachés compartidas, herramientas de desarrollo y paquetes
+binarios está en [Distribución y dependencias](docs/blueprint/distribution.md).
 
 ```text
 include/kotavel/   Interfaces públicas del núcleo, HTTP opcional y deep links
@@ -68,6 +70,8 @@ La detección del sistema operativo está disponible en
 `<kotavel/system/os.hpp>` mediante `kotavel::OS::type` y los helpers
 `isWindows()`, `isMac()`, `isLinux()` y `name()`. Para mostrar el nombre usa
 `std::cout << kotavel::OS::name()`; `type` se conserva para comparaciones.
+El valor lo define el adaptador nativo incluido por CMake; la cabecera pública
+no detecta plataformas con macros del compilador.
 
 ## Utilizar desde el Laboratorio
 
@@ -84,8 +88,10 @@ del compilador de la plataforma. El ejecutable realiza una operación y termina 
 En macOS y Linux debes tener un compilador compatible con C++23 en el PATH.
 En Windows se necesita Python x64 y PowerShell; el instalador prepara LLVM-MinGW.
 La preparación reutiliza LLVM-MinGW instalado y los binarios nativos de CMake.
-En Windows, Conan usa una caché compartida en `%USERPROFILE%\\.k` para que las
-rutas generadas por Qt no excedan el límite de longitud de Windows.
+En macOS/Linux Conan comparte paquetes entre proyectos en `~/.kotavel/conan`;
+en Windows usa `%USERPROFILE%\\.k` para evitar que Qt exceda el límite de rutas.
+Los proyectos que ya tenían `.kotavel/conan` conservan esa caché. Puedes fijar
+otra ruta compartida con `KOTAVEL_CONAN_HOME`.
 En Windows, el entorno generado selecciona `mingw64` para OpenSSL: LLVM-MinGW
 usa el ABI GNU y la receta de Conan selecciona Visual C++ por defecto para Clang.
 Esta configuración se conserva en `install`, `build`, `run` y la terminal activada.
@@ -112,13 +118,25 @@ conan create ../Kotavel --build=missing
 exit
 ```
 
-Esto crea `kotavel/0.1.0` en la caché del Laboratorio. Para consumirlo, cambia
+Esto crea `kotavel/0.1.0` en la caché compartida de Conan. Para consumirlo, cambia
 su configuración a `mode: package` y `version: 0.1.0`, y ejecuta dependencias
 y compilación nuevamente. La guía `docs/framework.md` del Laboratorio explica
 la selección de origen.
 
-No existe una publicación remota configurada. Las dependencias obligatorias y
-opcionales del framework se declaran en las constantes literales de esta receta.
+Las dependencias obligatorias y opcionales del framework se declaran en las
+constantes literales de esta receta. Para consumir paquetes binarios precompilados,
+configura `KOTAVEL_CONAN_REMOTE_URL` y, si el servidor requiere autenticación,
+`KOTAVEL_CONAN_REMOTE_USER` y `KOTAVEL_CONAN_REMOTE_PASSWORD`. `kotavel prepare`,
+`install`, `build`, `run` y `test --framework` agregan el remote en primer lugar;
+Conan descarga el binario compatible y `--build=missing` compila como fallback.
+
+El workflow manual `.github/workflows/conan-binaries.yml` construye y publica el
+grafo Conan para macOS, Linux y Windows en Release. Los inputs permiten incluir
+Drogon y Qt. Además, valida en runners limpios una instalación binaria con
+`--build=never` y compila un consumidor de `Kotavel::Core`. Requiere configurar
+los secretos `KOTAVEL_CONAN_REMOTE_URL`, `KOTAVEL_CONAN_REMOTE_USER` y
+`KOTAVEL_CONAN_REMOTE_PASSWORD` en GitHub; los de usuario y contraseña se pueden
+omitir si el remote acepta publicaciones anónimas.
 ## Herramientas compartidas
 
 `tools/kotavel_cli/` mantiene los comandos `prepare`, `install`, `build`, `test`,

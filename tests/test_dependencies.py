@@ -160,11 +160,12 @@ class DependencyTests(unittest.TestCase):
             }), encoding='utf-8-sig')
             platform_os = SimpleNamespace(name=system, environ={'PATH': 'original'}, pathsep=separator)
             platform_name = 'Windows' if system == 'nt' else 'Linux'
-            with patch.object(deps, 'os', platform_os), patch.object(deps.platform, 'system', return_value=platform_name), patch.object(deps, 'execute') as run:
+            adapter = deps.get_platform(platform_name)
+            with patch.object(deps, 'os', platform_os), patch.object(deps, 'get_platform', return_value=adapter), patch.object(deps, 'execute') as run:
                 conan, env = deps.prepare_environment(True)
             self.assertEqual(conan, binary)
             self.assertEqual(env['PATH'], separator.join((str(binary.parent), 'compiler', 'original')))
-            expected_home = Path.home() / '.k' if system == 'nt' else self.root / '.kotavel/conan'
+            expected_home = Path.home() / '.k' if system == 'nt' else Path.home() / '.kotavel/conan'
             self.assertEqual(Path(env['CONAN_HOME']).resolve(), expected_home.resolve())
             if system == 'nt':
                 self.assertEqual(env['CONAN_OPENSSL_CONFIGURATION'], 'mingw64')

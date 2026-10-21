@@ -6,6 +6,11 @@ Este documento describe la arquitectura objetivo. Existe una primera implementac
 
 La convención para identificar kernels, providers y componentes con prefijos de
 framework o de proyecto está definida en [Convención de nombres](naming.md).
+La propuesta de cachés, paquetes binarios, herramientas y publicación se
+documenta en [Distribución y dependencias](distribution.md).
+Ese documento también muestra un ejemplo de estructura interna de una
+biblioteca y la separación entre sus contratos y métodos públicos, la lógica
+común y los adaptadores de terceros.
 
 **La continuidad controlada de la aplicación y la facilidad de depuración son requisitos fundamentales del núcleo.** Un fallo recuperable de una operación debe quedar aislado, con información suficiente para investigarlo y sin detener las demás operaciones. El rendimiento se evaluará junto con estos requisitos.
 
@@ -43,6 +48,71 @@ flowchart TD
 ```
 
 El diagrama muestra relaciones conceptuales. Los adaptadores implementarían contratos del módulo correspondiente. Las bibliotecas externas quedarían detrás de adaptadores cuando eso permita controlar la interfaz pública: el consumidor utilizaría tipos de Kotavel y los detalles del proveedor permanecerían dentro de la integración.
+
+### Frontera de plataforma en el núcleo
+
+Las diferencias del sistema operativo pertenecen a contratos pequeños de
+`include/kotavel/contracts/` y a implementaciones bajo `src/platform/`. CMake
+elige una implementación nativa por plataforma; el bootstrap la registra como
+provider predeterminado. Los providers de la aplicación se registran antes y
+pueden reemplazar esos defaults. El núcleo consume el contrato y no incluye
+headers de Windows, POSIX, macOS ni Linux. Esta regla aplica al interior de
+Kotavel; no obliga a las aplicaciones consumidoras a adoptar los adaptadores
+internos ni cambia sus APIs.
+
+Las fronteras implementadas incluyen `ProcessMetricsProvider`, que deja el
+cálculo común de porcentajes separado de la lectura nativa; `SystemPaths`, que
+resuelve carpetas de configuración, datos y caché; y `RuntimePathResolver`, que
+ubica plugins, traducciones y certificados junto al ejecutable o dentro del
+bundle. `PlatformServices` ofrece una vista agrupada sobre esos contratos. El
+bootstrap registra cada adaptador nativo como default y compone el agregado;
+los providers de aplicación pueden sustituir un contrato antes del registro de
+defaults. Las referencias agrupadas pertenecen al contenedor y caducan con él.
+
+La selección por sistema operativo se limita a `cmake/KotavelPlatform.cmake`,
+que agrega los fuentes nativos correspondientes. El código C++ común no
+contiene `#ifdef _WIN32`, `__APPLE__` ni ramas por sistema. Incluso la
+información pública de `OS` proviene del adaptador compilado; no detecta la
+plataforma con macros en una cabecera. Las diferencias de capacidades nativas
+se resuelven mediante fuentes seleccionadas por CMake, no con preprocesador en
+la implementación compartida. Los `#ifdef` de capacidades del compilador o de
+símbolos disponibles se permiten cuando no representan una decisión de sistema
+operativo.
+
+El patrón se aplica donde hay una capacidad dependiente del sistema, no
+forzando interfaces de plataforma en cada módulo:
+
+| Módulo | Comportamiento común | Frontera de plataforma |
+| --- | --- | --- |
+| `foundation`, `container`, `config`, `env`, `text` | Ciclo de vida, servicios, configuración y textos | No necesitan adaptador propio; usan contratos comunes de otros módulos si hace falta. |
+| `diagnostics` | Formato, reporte y registro | Hora UTC, trazas y lease de directorio se delegan a fuentes seleccionadas por CMake. |
+| `console` | Arranque, ejecución y mensajes | Compone los providers y consulta `OS::key()` como dato; no selecciona código con ramas. |
+| `metrics` | Cálculo y publicación de métricas | `ProcessMetricsProvider`, transporte local y PID tienen implementaciones nativas. |
+| `http` | Rutas, requests, validación y respuestas | La resolución de host y el transporte nativo se delegan; la integración Drogon es un target opcional. |
+| `desktop` | Ciclo de vida y contratos desktop | Qt está tras `Kotavel::DesktopQt`; su implementación es opcional y se enlaza aparte. |
+
+Los contratos agrupan capacidades estables; no deben crecer como una interfaz
+gigante que mezcle rutas, procesos, métricas, deep links y energía. Por ejemplo,
+`ProcessManager`, `UrlSchemeRegistrar` y `PowerManager` solo se añadirán al
+aparecer una API requerida y un comportamiento comprobable. El listado y la
+organización detallados están en [Distribución y dependencias](distribution.md).
+
+### Adaptadores de plataforma de la CLI
+
+Los comandos de desarrollo siguen el mismo límite. `tools/kotavel_cli/platforms/`
+contiene el contrato base, la implementación POSIX compartida y adaptadores de
+Windows, Linux y macOS. `get_platform()` selecciona el adaptador al entrar a la
+CLI; `install.py`, `deps.py`, `package.py` y `project_paths.py` delegan en él la
+preparación del toolchain, rutas de herramientas, locks, activación de shell,
+ejecución de bundles `.app` y soporte del empaquetador. Las diferencias entre
+sistemas viven en esos adaptadores; los comandos no repiten condicionales por
+sistema operativo.
+
+Las pruebas del contrato y los casos específicos de macOS están en
+`tests/test_platform_adapters.py`; se ejecutan junto con el resto de pruebas
+Python mediante `python3 kotavel.py test --framework` desde el laboratorio.
+Esta validación nativa prueba macOS arm64; no sustituye las ejecuciones en
+Windows y Linux.
 
 Los futuros targets podrían ser `Kotavel::Console`, `Kotavel::Events`, `Kotavel::Http`, `Kotavel::Database`, `Kotavel::Cache` y `Kotavel::Queue`. Solo `Kotavel::Core` existe hoy. Al implementarlos, sus opciones CMake y Conan deberán coincidir para que una dependencia opcional no se convierta en requisito obligatorio del núcleo.
 
@@ -197,6 +267,13 @@ Windows, Linux y macOS deben consumir los mismos contratos públicos. Los detall
 
 Los paquetes C++ deben usar configuraciones compatibles de compilador, biblioteca estándar y opciones de construcción. No se promete compatibilidad binaria entre toolchains. Las interfaces públicas se versionarán y se probarán desde un proyecto consumidor independiente. También mediremos tiempos de compilación: un diseño con plantillas excesivas puede dificultar la experiencia de desarrollo.
 
+La distribución separa el paquete C++ del framework, las dependencias del
+consumidor, el remote Conan y la caché de la máquina. El análisis, el flujo de
+instalación, las ubicaciones y el estado de implementación están en
+[Distribución y dependencias](distribution.md). La ubicación actual del entorno
+Python por proyecto figura allí como una brecha pendiente respecto al objetivo
+de herramientas compartidas.
+
 ## Etapas de construcción
 
 1. **Fundamentos:** ciclo de vida, configuración, propiedad de objetos, política central de errores, diagnóstico y registro de servicios. La recuperación de operaciones y la depuración forman parte de esta etapa.
@@ -252,6 +329,6 @@ La demostración inicial obligatoria para los módulos que ejecuten operaciones 
 | Ejecución | Modelo síncrono/asíncrono, executor, cancelación y plazos |
 | Módulos y proveedores | Dependencias, selección y contratos públicos |
 | Rendimiento | Escenarios, referencias y límites de regresión por plataforma |
-| Distribución | Versionado, compatibilidad y publicación de paquetes y herramientas |
+| Distribución | Versionado, compatibilidad, cachés compartidas y publicación de paquetes y herramientas; ver [el diseño de distribución](distribution.md) |
 
 El primer diseño debe concretar el ciclo de vida y las dependencias: qué sucede al arrancar, cómo se construyen los servicios, cuánto viven y cómo se cierran. Esa base sostendrá las capacidades posteriores de Kotavel.

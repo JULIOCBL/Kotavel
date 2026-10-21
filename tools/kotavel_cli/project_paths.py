@@ -1,12 +1,15 @@
 """Paths shared by local preparation and dependency commands."""
 from pathlib import Path
+import os
+
+try:
+    from .platforms import get_platform
+except ImportError:  # install.py can import this module as a direct script.
+    from platforms import get_platform
 
 
 def conan_home(project_root, system):
-    """Give Windows packages a short, stable cache path to avoid MAX_PATH."""
+    """Share the Conan cache between projects while retaining legacy caches."""
     project_root = Path(project_root).resolve()
-    if system == 'Windows':
-        # Qt MOC still hits MAX_PATH in deeply nested generated include paths;
-        # keep one shared Conan cache root exceptionally short on Windows.
-        return Path.home() / '.k'
-    return project_root / '.kotavel' / 'conan'
+    return get_platform(system).conan_home(
+        project_root, Path.home(), os.environ.get('KOTAVEL_CONAN_HOME'))

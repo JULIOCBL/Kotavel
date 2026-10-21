@@ -5,6 +5,19 @@ acciones que requieren el inicio y el cierre del proceso. El consumidor crea
 explícitamente sus providers y se los entrega a `run_console`; Kotavel no busca
 clases ni archivos automáticamente.
 
+El runtime registra primero los providers de la aplicación y después los
+providers internos de Kotavel. Un provider de aplicación puede así reemplazar
+un adaptador predeterminado del núcleo. Por ejemplo,
+`kotavel::contracts::ProcessMetricsProvider` abstrae la lectura nativa de CPU y
+memoria; si la aplicación no lo registra, Kotavel instala el adaptador
+seleccionado por CMake para Windows, macOS o Linux.
+`kotavel::contracts::SystemPaths` usa el mismo mecanismo para ofrecer rutas de
+configuración, datos y caché según las convenciones de la plataforma.
+`RuntimePathResolver` localiza plugins, traducciones y certificados junto al
+ejecutable o dentro del bundle de macOS. `PlatformServices` agrupa referencias a
+estos contratos para consumidores que prefieren una sola vista del entorno
+nativo; las referencias viven mientras viva el `Container`.
+
 ## Responsabilidades
 
 Cada provider tiene tres etapas:

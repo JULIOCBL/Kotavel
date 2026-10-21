@@ -4,12 +4,10 @@ import configparser
 import importlib.util
 import io
 import json
-import ntpath
 import os
 from pathlib import Path
 import platform
 import re
-import shlex
 import shutil
 import subprocess
 import sys
@@ -18,8 +16,12 @@ import venv
 
 try:
     from .project_paths import conan_home
+    from .conan_remote import configure_remote
+    from .platforms import get_platform
 except ImportError:  # install.py also runs directly as a preparation subprocess.
     from project_paths import conan_home
+    from conan_remote import configure_remote
+    from platforms import get_platform
 
 # Load by file path as tests and other callers can import this script directly.
 _posix_spec = importlib.util.spec_from_file_location('kotavel_posix', Path(__file__).with_name('posix_environment.py'))
@@ -30,56 +32,23 @@ ROOT = Path.cwd()
 PLATFORM = Path(__file__).resolve().parent / "platform"
 DEFAULT_PROFILES = Path(__file__).resolve().parent / "templates" / "application" / "profiles"
 TOOLS = ROOT / '.kotavel' / 'tools'
-CONAN_HOME = conan_home(ROOT, platform.system())
+CONAN_HOME = conan_home(ROOT, get_platform().name)
 SYSTEMS = {'Windows': ('windows', 'Windows'), 'Linux': ('linux', 'Linux'), 'Darwin': ('macos', 'Macos')}
 
 
 def read_profile(system):
-    if system not in SYSTEMS:
-        raise RuntimeError(f'Sistema no soportado: {system}')
-    name, conan_os = SYSTEMS[system]
-    path = ROOT / 'profiles' / name
-    if not path.is_file():
-        path = DEFAULT_PROFILES / name
-    config = configparser.ConfigParser(interpolation=None, delimiters=('=',))
-    config.optionxform = str
-    with path.open(encoding='utf-8-sig') as source:
-        config.read_file(source)
-    if config['settings']['os'] != conan_os:
-        raise RuntimeError(f'El sistema de {path} no coincide con {system}')
-    return path, config
+    return get_platform(system).read_profile(ROOT, DEFAULT_PROFILES)
 
 
 def architecture(machine):
-    aliases = {'amd64': 'x86_64', 'x86_64': 'x86_64', 'arm64': 'armv8', 'aarch64': 'armv8'}
-    if machine.lower() not in aliases:
-        raise RuntimeError(f'Arquitectura no soportada: {machine}')
-    return aliases[machine.lower()]
+    return get_platform().architecture(machine)
 
 
 def run(args, env):
     command = [str(arg) for arg in args]
     command[0] = shutil.which(command[0], path=env.get('PATH')) or command[0]
-    # The pip launchers start Python just to invoke these native executables.
-    # Only bypass our own launchers, preserving external tool selection.
-    if platform.system() == 'Windows':
-        executable = Path(command[0])
-        scripts = TOOLS / 'python' / 'Scripts'
-        if executable.parent == scripts and executable.name.lower() in ('cmake.exe', 'ctest.exe'):
-            native = TOOLS / 'python' / 'Lib' / 'site-packages' / 'cmake' / 'data' / 'bin' / executable.name
-            if native.is_file():
-                command[0] = str(native)
-    elif platform.system() in ('Linux', 'Darwin'):
-        executable = Path(command[0])
-        if executable.parent == TOOLS / 'python' / 'bin' and executable.name in ('cmake', 'ctest'):
-            candidates = list(dict.fromkeys(
-                path.resolve()
-                for library in ('lib', 'lib64')
-                for path in (TOOLS / 'python' / library).glob(
-                    f'python*/site-packages/cmake/data/bin/{executable.name}')))
-            # An ambiguous or incomplete installation keeps the original launcher.
-            if len(candidates) == 1 and candidates[0].is_file() and os.access(candidates[0], os.X_OK):
-                command[0] = str(candidates[0])
+    # Bypass our own pip launchers for native executables when possible.
+    command = get_platform().resolve_native_command(command, TOOLS)
     subprocess.run(command, cwd=ROOT, env=env, check=True)
 
 
@@ -90,76 +59,19 @@ def write_if_changed(path, content, encoding='utf-8'):
 
 def prepend_tools_path(env, directory, system):
     """Keep activation repeatable without changing other PATH entries."""
-    directory = str(directory)
-    current = env.get('PATH', '')
-    if system == 'Windows':
-        key = ntpath.normcase(ntpath.normpath(directory))
-        entries = [entry for entry in current.split(';')
-                   if ntpath.normcase(ntpath.normpath(entry.strip('"'))) != key]
-        env['PATH'] = ';'.join([directory, *entries])
-    else:
-        key = os.path.normpath(directory)
-        entries = [entry for entry in current.split(os.pathsep)
-                   if os.path.normpath(entry) != key]
-        env['PATH'] = os.pathsep.join([directory, *entries])
+    get_platform(system).prepend_tools_path(env, directory)
 
 
 def installed_windows_platform(config, env):
     """Reuse an installed LLVM-MinGW; leave installation to PowerShell."""
-    if config['settings']['compiler'] != 'clang':
-        return None
-    if config['settings']['arch'] != 'x86_64':
-        raise RuntimeError('LLVM-MinGW portable requiere Python x64.')
-    candidates = sorted(TOOLS.glob('llvm-mingw-*-ucrt-x86_64'), key=lambda path: path.name.lower(), reverse=True)
-    toolchain = next((path for path in candidates if path.is_dir() and
-                      (path / 'bin' / 'clang++.exe').is_file()), None)
-    if toolchain is None or not (toolchain / 'bin' / 'clang.exe').is_file():
-        return None
-    shell = shutil.which('pwsh', path=env.get('PATH')) or shutil.which('powershell', path=env.get('PATH'))
-    if not shell:
-        raise RuntimeError('Se necesita PowerShell para preparar Windows.')
-    return {
-        'scripts_directory': 'Scripts', 'python_executable': 'python.exe',
-        'compiler_bin': str(toolchain / 'bin'),
-        'shell': [shell, '-NoLogo', '-NoProfile'], 'activation_kind': 'powershell',
-        'build_environment': {'CONAN_OPENSSL_CONFIGURATION': 'mingw64'},
-    }
+    return get_platform('Windows').installed_toolchain(config, env, TOOLS)
 
 
 def prepare_platform(system, config, env, configure_only):
     """Delegate operating-system preparation and read its environment manifest."""
-    manifest = TOOLS / 'platform.json'
-    if system in ('Linux', 'Darwin'):
-        prepared = _posix.prepare(config['settings']['compiler'], env)
-        write_if_changed(manifest, json.dumps(prepared))
-        return prepared
-    if system == 'Windows':
-        prepared = installed_windows_platform(config, env)
-        if prepared is not None:
-            write_if_changed(manifest, json.dumps(prepared), encoding='utf-8-sig')
-            prepend_tools_path(env, prepared['compiler_bin'], system)
-            return prepared
-    manifest.unlink(missing_ok=True)
-    if system == 'Windows':
-        shell = shutil.which('powershell', path=env.get('PATH')) or shutil.which('pwsh', path=env.get('PATH'))
-        if not shell:
-            raise RuntimeError('Se necesita PowerShell para preparar Windows.')
-        command = [shell, '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
-                   PLATFORM / 'install-windows.ps1', '-Tools', TOOLS,
-                   '-Compiler', config['settings']['compiler'],
-                   '-Architecture', config['settings']['arch'], '-Manifest', manifest]
-        if configure_only:
-            command.append('-ConfigureOnly')
-    else:
-        name = SYSTEMS[system][0]
-        command = ['sh', PLATFORM / f'install-{name}.sh',
-                   sys.executable, manifest, config['settings']['compiler']]
-    run(command, env)
-    with manifest.open(encoding='utf-8-sig') as source:
-        prepared = json.load(source)
-    if prepared['compiler_bin']:
-        prepend_tools_path(env, prepared['compiler_bin'], system)
-    return prepared
+    return get_platform(system).prepare(
+        config, env, configure_only, tools=TOOLS, scripts=PLATFORM,
+        run_command=run, write_if_changed=write_if_changed)
 
 
 def compiler_environment(config, env, executables=None):
@@ -195,28 +107,14 @@ def compiler_environment(config, env, executables=None):
 
 
 def write_activation(prepared, env):
-    # Python cannot change its parent shell: emit a file to load in that shell.
-    if prepared['activation_kind'] == 'powershell':
-        quote = lambda value: "'" + value.replace("'", "''") + "'"
-        script = '$env:PATH = ' + quote(env['PATH']) + '\n$env:CONAN_HOME = ' + quote(str(CONAN_HOME)) + '\n'
-        for name, value in prepared.get('build_environment', {}).items():
-            script += '$env:' + name + ' = ' + quote(value) + '\n'
-        write_if_changed(TOOLS / 'activate.ps1', script, encoding='utf-8-sig')
-    else:
-        script = 'export PATH=' + shlex.quote(env['PATH']) + '\nexport CONAN_HOME=' + shlex.quote(str(CONAN_HOME)) + '\n'
-        if platform.system() in ('Linux', 'Darwin'):
-            write_if_changed(TOOLS / 'activate.sh', script)
-        else:
-            (TOOLS / 'activate.sh').write_text(script, encoding='utf-8')
+    adapter = get_platform('Windows' if prepared['activation_kind'] == 'powershell' else None)
+    adapter.write_activation(prepared, env, TOOLS, CONAN_HOME, write_if_changed)
 
 
 def success_banner(system, action):
     use_color = sys.stdout.isatty()
-    if use_color and system == 'Windows':
-        import ctypes
-        handle = ctypes.windll.kernel32.GetStdHandle(-11)
-        mode = ctypes.c_ulong()
-        use_color = bool(ctypes.windll.kernel32.GetConsoleMode(handle, ctypes.byref(mode)) and ctypes.windll.kernel32.SetConsoleMode(handle, mode.value | 4))
+    if use_color:
+        use_color = get_platform(system).configure_console()
     def line(text, color):
         print(f'\033[{color}m{text}\033[0m' if use_color else text, flush=True)
     print('', flush=True)
@@ -256,49 +154,18 @@ def project_executable(build_type):
 
 def project_executable_path(build_type, name, system):
     """Resuelve ejecutables en la ubicación estándar o en app/ del consumidor."""
-    filename = name + '.exe' if system == 'Windows' else name
-    build = ROOT / 'build' / build_type
-    if system == 'Darwin':
-        bundle = build / 'app' / (name + '.app')
-        if bundle.is_dir():
-            return bundle
-    candidates = (build / 'app' / filename, build / filename)
-    return next((path for path in candidates if path.is_file()), candidates[0])
+    return get_platform(system).executable_path(ROOT, build_type, name)
 
 
 def runtime_environment(env, build_type):
     """Add Conan's generated runtime DLL paths on Windows, leaving POSIX untouched."""
-    runtime_env = dict(env)
-    if platform.system() != 'Windows':
-        return runtime_env
-    generators = ROOT / 'build' / build_type / 'generators'
-    scripts = sorted(generators.glob('conanrunenv-*.bat'))
-    if not scripts:
-        return runtime_env
-    path_updated = False
-    for line in scripts[0].read_text(encoding='utf-8-sig').splitlines():
-        match = re.fullmatch(r'\s*set\s+"(QT_PLUGIN_PATH|OPENSSL_MODULES|PATH)=(.*)"\s*', line, re.IGNORECASE)
-        if not match:
-            continue
-        name, value = match.group(1).upper(), match.group(2)
-        if name == 'PATH':
-            if path_updated:
-                continue
-            value = re.sub(r'%PATH%', lambda _: runtime_env.get('PATH', ''), value, flags=re.IGNORECASE)
-            runtime_env['PATH'] = value
-            path_updated = True
-        else:
-            runtime_env[name] = value
-    return runtime_env
+    return get_platform().runtime_environment(env, ROOT, build_type)
 
 
 def run_application(executable, environment, deep_link, env, build_type='Debug'):
     """Ejecuta el consumidor con el entorno elegido y, opcionalmente, una URI desktop."""
     executable = Path(executable)
-    if platform.system() == 'Darwin' and executable.suffix == '.app':
-        # Ejecutar el binario del bundle desde el CLI evita depender de que
-        # Launch Services permita abrirlo en entornos administrados.
-        executable = executable / 'Contents' / 'MacOS' / executable.stem
+    executable = get_platform().executable_for_run(executable)
     command = [executable, '--env=' + environment, '--project-root=' + str(ROOT)]
     if deep_link:
         # DesktopKernel valida el esquema configurado y resuelve la ruta registrada.
@@ -378,7 +245,7 @@ def main(argv=None):
     if args.project is not None:
         ROOT = args.project.resolve()
         TOOLS = ROOT / '.kotavel' / 'tools'
-        CONAN_HOME = conan_home(ROOT, platform.system())
+        CONAN_HOME = conan_home(ROOT, get_platform().name)
     if not (ROOT / 'conanfile.py').is_file():
         raise RuntimeError(f'No se encontró conanfile.py en {ROOT}')
     framework_source = None
@@ -394,10 +261,10 @@ def main(argv=None):
             raise RuntimeError(f'No se encontraron las pruebas de Kotavel en {framework_source}')
     if args.shell and not sys.stdin.isatty():
         raise RuntimeError('--shell requiere una terminal interactiva; en CI utiliza --build.')
-    system = platform.system()
+    adapter = get_platform()
+    system = adapter.name
     profile_path, config = read_profile(system)
-    machine = sysconfig.get_platform().removeprefix('win-') if system == 'Windows' else platform.machine()
-    config['settings']['arch'] = architecture(machine)
+    config['settings']['arch'] = architecture(adapter.compiler_machine())
     if args.build_type:
         config['settings']['build_type'] = args.build_type
     if config['settings']['compiler'] == 'msvc':
@@ -418,24 +285,20 @@ def main(argv=None):
             run([python, '-m', 'pip', 'install', '--disable-pip-version-check', 'conan>=2,<3', 'cmake>=3.25', 'ninja'], env)
     if not all(shutil.which(tool, path=str(scripts)) for tool in ('conan', 'cmake', 'ninja')):
         raise RuntimeError('Faltan las herramientas locales; ejecuta la preparación sin --configure-only.')
+    if not args.configure_only:
+        configure_remote(shutil.which('conan', path=str(scripts)), env, run)
     compiler_environment(config, env, prepared.get('compiler_executables'))
     destination = CONAN_HOME / 'profiles' / 'default'
     destination.parent.mkdir(parents=True, exist_ok=True)
     target = io.StringIO()
     target.write(f'# Generado desde {profile_label(profile_path)}\n')
     config.write(target, space_around_delimiters=False)
-    if system in ('Windows', 'Linux', 'Darwin'):
-        write_if_changed(destination, target.getvalue())
-    else:
-        destination.write_text(target.getvalue(), encoding='utf-8')
+    write_if_changed(destination, target.getvalue())
     write_activation(prepared, env)
     print(f'Perfil leído: {profile_label(profile_path)}', flush=True)
     print(f'Entorno preparado: {system} / {config["settings"]["arch"]} / {config["settings"]["compiler"]} {config["settings"]["compiler.version"]} / C++{config["settings"]["compiler.cppstd"]} / {build_type}', flush=True)
     if not args.shell and not args.build and not args.run and not args.test:
-        if system == 'Windows':
-            print('Activa esta terminal: . .\\.kotavel\\tools\\activate.ps1', flush=True)
-        else:
-            print('Activa esta terminal: source .kotavel/tools/activate.sh', flush=True)
+        print('Activa esta terminal: ' + get_platform(system).activation_command(), flush=True)
         print('Después: conan install . --build=missing', flush=True)
     if args.build or args.run:
         preset = 'conan-' + build_type.lower()

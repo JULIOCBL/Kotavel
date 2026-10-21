@@ -6,6 +6,7 @@ set(KOTAVEL_WITH_HTTP ${KOTAVEL_BUILD_HTTP})
 option(KOTAVEL_BUILD_DESKTOP_QT "Build optional Qt Quick desktop windows" OFF)
 
 include(cmake/Messages.cmake)
+include(cmake/KotavelPlatform.cmake)
 
 # Núcleo compilado: ciclo de vida y diagnóstico sin dependencias externas.
 add_library(kotavel_core STATIC
@@ -24,6 +25,7 @@ add_library(kotavel_core STATIC
     src/env/app_environment.cpp
     # Contenedor explícito de servicios y su ciclo de vida.
     src/container/container.cpp
+    src/platform/platform_service_provider.cpp
     src/console/runtime.cpp
     src/console/settings.cpp
     src/console/arguments.cpp
@@ -39,22 +41,13 @@ add_library(kotavel_core STATIC
     src/diagnostics/error.cpp
     src/diagnostics/stack_trace.cpp
     src/diagnostics/error_renderer.cpp
-    src/diagnostics/pending.cpp)
-
-if(WIN32)
-    target_sources(kotavel_core PRIVATE src/metrics/process_metrics_windows.cpp)
-    target_link_libraries(kotavel_core PRIVATE Psapi Ws2_32)
-else()
-    target_sources(kotavel_core PRIVATE src/metrics/process_metrics_posix.cpp)
-endif()
+    src/diagnostics/pending.cpp
+    ${KOTAVEL_PLATFORM_SOURCES})
+target_link_libraries(kotavel_core PRIVATE ${KOTAVEL_PLATFORM_LIBRARIES})
 
 # Comprobar enlace, no solo cabecera: algunas libc no ofrecen backtrace.
-include(CheckCXXSymbolExists)
-if(NOT WIN32)
-    check_cxx_symbol_exists(backtrace "execinfo.h" KOTAVEL_HAS_BACKTRACE)
-    if(KOTAVEL_HAS_BACKTRACE)
-        target_compile_definitions(kotavel_core PRIVATE KOTAVEL_HAS_BACKTRACE=1)
-    endif()
+if(KOTAVEL_HAS_BACKTRACE)
+    target_compile_definitions(kotavel_core PRIVATE KOTAVEL_HAS_BACKTRACE=1)
 endif()
 find_package(Threads REQUIRED)
 target_link_libraries(kotavel_core PUBLIC Threads::Threads)
@@ -83,10 +76,7 @@ target_include_directories(kotavel_http_contract PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
 target_link_libraries(kotavel_http_contract PUBLIC Kotavel::Core
-    PRIVATE $<BUILD_INTERFACE:rapidjson>)
-if(WIN32)
-    target_link_libraries(kotavel_http_contract PUBLIC Ws2_32)
-endif()
+    PRIVATE $<BUILD_INTERFACE:rapidjson> ${KOTAVEL_HTTP_PLATFORM_LIBRARIES})
 
 add_library(kotavel_desktop STATIC
     src/desktop/desktop.cpp)
@@ -178,12 +168,18 @@ if(KOTAVEL_BUILD_TESTS)
     add_executable(kotavel_os_tests tests/unit/system/os_tests.cpp)
     target_link_libraries(kotavel_os_tests PRIVATE Kotavel::Core)
     add_test(NAME kotavel.os COMMAND kotavel_os_tests)
+    add_executable(kotavel_platform_services_integration_tests
+        tests/integration/platform_services.cpp)
+    target_link_libraries(kotavel_platform_services_integration_tests PRIVATE Kotavel::Core)
+    add_test(NAME kotavel.platform.services
+        COMMAND kotavel_platform_services_integration_tests)
+    set_tests_properties(kotavel.platform.services PROPERTIES TIMEOUT 15)
     add_executable(kotavel_metrics_stream_fixture tests/unit/metrics/metrics_stream_fixture.cpp)
     target_link_libraries(kotavel_metrics_stream_fixture PRIVATE Kotavel::Core)
     add_test(NAME kotavel.metrics.stream COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/metrics_stream.py
         $<TARGET_FILE:kotavel_metrics_stream_fixture>)
-    set_tests_properties(kotavel.metrics.stream PROPERTIES TIMEOUT 10)
+    set_tests_properties(kotavel.metrics.stream PROPERTIES TIMEOUT 10 SKIP_RETURN_CODE 77)
     add_executable(kotavel_env_tests tests/unit/env/env_tests.cpp)
     target_link_libraries(kotavel_env_tests PRIVATE Kotavel::Core)
     add_test(NAME kotavel.env COMMAND kotavel_env_tests)

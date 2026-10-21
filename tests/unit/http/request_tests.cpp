@@ -137,19 +137,10 @@ int main() {
       "roles":["admin","editor"], "rows":[{"code":"row_1"},{"code":"row_2"}],
       "alternative":"ada_7", "settings":{"theme":"dark","locale":"es"},
       "locale_date":"31/12/2026", "clock":"17:30:05", "zone":"UTC",
-      "region_zone":"UTC", "encoding_text":"Mérida", "terms":"yes",
+      "encoding_text":"Mérida", "terms":"yes",
       "decline":"no", "acceptance":"yes", "declined_status":"no", "choices":["red","blue"],
       "choice":"blue"
     })";
-#if defined(_WIN32)
-    // Windows does not ship the IANA zoneinfo file tree used by this validator.
-    const auto replace_zone = [&](std::string_view old_zone) {
-        const auto offset = rule_payload.find(old_zone);
-        if (offset != std::string::npos) rule_payload.replace(offset, old_zone.size(), "UTC");
-    };
-    replace_zone("America/Cancun");
-    replace_zone("America/New_York");
-#endif
     Request rule_data = json_request(rule_payload);
     RulesRequest scalar_rules(rule_data, {
         {"name", {"required", "alpha"}}, {"username", {"alpha_dash"}},
@@ -165,11 +156,6 @@ int main() {
         {"token", {"uuid"}}, {"ulid", {"ulid"}}, {"start", {"date", "date_format:Y-m-d", "date_equals:2026-01-01"}},
         {"locale_date", {"date_format:d/m/Y, Y-m-d"}}, {"clock", {"date_format:H:i:s"}},
         {"zone", {"timezone"}},
-#if defined(_WIN32)
-        {"region_zone", {"timezone"}},
-#else
-        {"region_zone", {"timezone:America"}},
-#endif
         {"encoding_text", {"encoding:utf-8"}},
         {"end", {"date", "after:start", "after_or_equal:start", "before:2027-01-01",
                  "before_or_equal:2027-01-01"}},

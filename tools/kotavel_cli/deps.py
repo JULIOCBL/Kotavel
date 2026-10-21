@@ -5,7 +5,6 @@ from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
-import platform
 import re
 import runpy
 import subprocess
@@ -13,6 +12,7 @@ import sys
 import tempfile
 
 from .project_paths import conan_home
+from .platforms import get_platform
 
 ROOT = Path.cwd()
 TOOLS = ROOT / '.kotavel' / 'tools'
@@ -88,27 +88,11 @@ def project_guard():
     """OS locks are released even if the process exits unexpectedly."""
     TOOLS.mkdir(parents=True, exist_ok=True)
     with (TOOLS / 'deps.guard').open('a+b') as stream:
-        if os.name == 'nt':
-            import msvcrt
-            if stream.seek(0, os.SEEK_END) == 0:
-                stream.write(b'\0')
-                stream.flush()
-            stream.seek(0)
-            acquire = lambda: msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
-            release = lambda: msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
-        else:
-            import fcntl
-            acquire = lambda: fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            release = lambda: fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
         try:
-            acquire()
+            with get_platform().lock_project(stream):
+                yield
         except OSError as error:
             raise RuntimeError('Otro comando install está trabajando en este proyecto; espera a que termine.') from error
-        try:
-            yield
-        finally:
-            stream.seek(0)
-            release()
 
 
 def execute(command, env):
@@ -187,8 +171,9 @@ def add_dependency(reference, conan, env, offline=False):
 
 
 def prepare_environment(offline):
-    scripts = TOOLS / 'python' / ('Scripts' if os.name == 'nt' else 'bin')
-    conan = scripts / ('conan.exe' if os.name == 'nt' else 'conan')
+    adapter = get_platform()
+    scripts = adapter.python_scripts(TOOLS)
+    conan = adapter.conan_path(TOOLS)
     prepare = [sys.executable, Path(__file__).with_name('install.py'), '--project', ROOT]
     if offline:
         prepare.append('--configure-only')
@@ -203,7 +188,7 @@ def prepare_environment(offline):
         paths.append(manifest['compiler_bin'])
     paths.append(env.get('PATH', ''))
     env['PATH'] = os.pathsep.join(paths)
-    env['CONAN_HOME'] = str(conan_home(ROOT, platform.system()))
+    env['CONAN_HOME'] = str(conan_home(ROOT, adapter.name))
     return conan, env
 
 

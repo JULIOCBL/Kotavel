@@ -1,7 +1,6 @@
 """Build and package a macOS Kotavel application bundle."""
 import argparse
 from pathlib import Path
-import platform
 import plistlib
 import re
 import shutil
@@ -10,6 +9,9 @@ import sys
 import tempfile
 import time
 import uuid
+
+from .project_paths import conan_home
+from .platforms import get_platform
 
 
 def environment_name(env_file):
@@ -53,14 +55,9 @@ def reset_output_directory(output, source):
 
 
 def macdeployqt(project_root):
-    tools = sorted((project_root / '.kotavel' / 'conan' / 'p' / 'b').glob('qt*/p/bin/macdeployqt'))
-    tool = next((candidate for candidate in tools if candidate.is_file()), None)
-    if tool is None:
-        from_path = shutil.which('macdeployqt')
-        tool = Path(from_path) if from_path else None
-    if tool is None:
-        raise RuntimeError('No se encontró macdeployqt. Instala Qt con Conan antes de empaquetar.')
-    return tool
+    adapter = get_platform()
+    adapter.require_packager()
+    return adapter.macdeployqt(project_root, conan_home(project_root, adapter.name))
 
 
 def package_app(app_bundle, output_directory, formats=('app', 'dmg', 'pkg'),
@@ -69,8 +66,7 @@ def package_app(app_bundle, output_directory, formats=('app', 'dmg', 'pkg'),
     """Create macOS deliverables for one built .app bundle."""
     output = Path(output_directory).resolve()
     formats = tuple(dict.fromkeys(formats))
-    if platform.system() != 'Darwin':
-        raise RuntimeError('El empaquetado .app/.dmg/.pkg solo está disponible en macOS.')
+    get_platform().require_packager()
     source = Path(app_bundle).resolve()
     if not source.is_dir() or source.suffix != '.app' or not (source / 'Contents' / 'Info.plist').is_file():
         raise ValueError(f'No es un bundle .app válido: {source}')
@@ -148,8 +144,8 @@ def main(argv=None):
     parser.add_argument('--project', type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
 
-    if platform.system() != 'Darwin':
-        raise RuntimeError('El comando package genera .app/.dmg/.pkg y requiere macOS.')
+    adapter = get_platform()
+    adapter.require_packager()
     root = (args.project or Path.cwd()).resolve()
     env_file = args.env_file if args.env_file.is_absolute() else root / args.env_file
     env_file = env_file.resolve()
@@ -169,10 +165,10 @@ def main(argv=None):
 
     build_type = args.build_type
     if build_type is None:
-        _, config = install.read_profile(platform.system())
+        _, config = install.read_profile(adapter.name)
         build_type = config['settings']['build_type']
     name = install.project_executable(build_type)
-    app_bundle = install.project_executable_path(build_type, name, platform.system())
+    app_bundle = install.project_executable_path(build_type, name, adapter.name)
     if not app_bundle.is_dir() or app_bundle.suffix != '.app':
         raise RuntimeError(f'No se encontró el bundle .app compilado: {app_bundle}')
     formats = ('app', 'dmg', 'pkg') if args.format == 'all' else (args.format,)

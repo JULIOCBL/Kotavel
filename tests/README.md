@@ -49,6 +49,14 @@ trazas por hilo y rechazo de carpetas compartidas. Python 3 ejecuta también una
 prueba con dos procesos reales y comprueba que el bloqueo se libera al cerrar.
 Las pruebas del núcleo requieren ahora Python 3, además de CMake y C++23.
 
+`kotavel.os` valida la identidad y las tres banderas del adaptador seleccionado.
+`kotavel.platform.services` arranca el runtime real y verifica el registro y la
+identidad de los servicios de plataforma, lectura nativa de métricas, rutas de
+configuración/datos/caché y rutas de recursos de ejecución. Comprueba las
+ubicaciones macOS, XDG/Linux y Windows según el adaptador compilado, y rechaza
+nombres de aplicación vacíos, anidados o con traversal. La matriz nativa debe
+ejecutarla en cada sistema para validar sus respectivos adaptadores.
+
 Desde un consumidor configurado en modo local, `python3 kotavel.py test --framework`
 ejecuta una comprobación completa: pruebas Python del framework y del consumidor,
 compilación y pruebas del núcleo, y compilación y pruebas de integración del
@@ -94,6 +102,26 @@ Las fuentes unitarias se organizan por módulo en `tests/unit/config/`,
 `tests/unit/env/`, `tests/unit/console/`, `tests/unit/metrics/`, `tests/unit/core/`,
 `tests/unit/system/`, `tests/unit/diagnostics/` y `tests/unit/logging/`. Las pruebas entre procesos
 permanecen en `tests/integration/`.
+
+## Matriz por módulo implementado
+
+| Módulo | Pruebas unitarias | Integración adicional |
+| --- | --- | --- |
+| Text | `kotavel.messages` | — |
+| Config | `kotavel.config`, `kotavel.config.extended`, `kotavel.config.edge` | Arranque del laboratorio |
+| Env | `kotavel.env` | Carga del entorno al arrancar la consola |
+| Container | `kotavel.container` | Registro y cierre de proveedores en `kotavel.console` |
+| Console y foundation | `kotavel.console`, `kotavel.core` | Arranque real del consumidor en Laboratory-Kotavel |
+| Diagnostics y logging | `kotavel.diagnostics`, `kotavel.logging`, `kotavel.console.logging` | `kotavel.logging.processes` |
+| Metrics | `kotavel.metrics` | `kotavel.metrics.stream` con cliente TCP local |
+| Platform | `kotavel.os` | `kotavel.platform.services`; transporte y bloqueo entre procesos |
+| HTTP | `kotavel.routes`, `kotavel.http.*` | Rutas reales en Laboratory-Kotavel |
+| Desktop | `kotavel.desktop` | Rutas y startup del laboratorio |
+
+La suite se ejecuta sobre el adaptador nativo que selecciona CMake. Por eso la
+misma matriz debe correr en macOS, Windows y Linux en CI: los mocks unitarios
+validan contratos y las pruebas de integración ejercitan los servicios nativos
+de cada sistema.
 
 `kotavel.console.logging` verifica el adaptador Config → LogOptions: defaults,
 canales single/stderr/null, tipos y límites inválidos, rutas relativas/absolutas,

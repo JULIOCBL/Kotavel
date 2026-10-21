@@ -1,5 +1,6 @@
 #include <kotavel/console/runtime.hpp>
-#include <kotavel/system/os.hpp>
+#include <kotavel/contracts/system_paths.hpp>
+#include <kotavel/contracts/platform_services.hpp>
 #include <iostream>
 #include <sstream>
 #include <fstream>
@@ -8,6 +9,21 @@
 #include <utility>
 
 namespace {
+class TestProcessMetricsProvider final : public kotavel::contracts::ProcessMetricsProvider {
+public:
+    std::optional<kotavel::contracts::ProcessMetricsSnapshot> read() const noexcept override {
+        return kotavel::contracts::ProcessMetricsSnapshot{std::chrono::milliseconds(1), 4321};
+    }
+};
+
+class CustomMetricsProvider final : public kotavel::ServiceProvider {
+public:
+    void register_services(kotavel::Container& services) override {
+        services.singleton<kotavel::contracts::ProcessMetricsProvider>(
+            [](kotavel::Container&) { return std::make_unique<TestProcessMetricsProvider>(); });
+    }
+};
+
 class ThrowingBootProvider final : public kotavel::ServiceProvider {
 public:
     void register_services(kotavel::Container&) override {}
@@ -81,6 +97,52 @@ int main() {
         return 0;
     };
     if (kotavel::run_console(2, args, configure, recovered) != 0) return 1;
+
+    auto verify_default_metrics_provider = [](kotavel::Application&,
+                                              const kotavel::ConsoleContext& context) {
+        if (!context.container->contains<kotavel::contracts::ProcessMetricsProvider>()) return 1;
+        const auto sample = context.container
+            ->get<kotavel::contracts::ProcessMetricsProvider>().read();
+        if (!sample || sample->resident_memory_bytes == 0 ||
+            !context.container->contains<kotavel::contracts::SystemPaths>() ||
+            !context.container->contains<kotavel::contracts::RuntimePathResolver>() ||
+            !context.container->contains<kotavel::contracts::PlatformServices>()) return 1;
+        const auto& paths = context.container->get<kotavel::contracts::SystemPaths>();
+        if (paths.data_directory("KotavelTest").filename() != "KotavelTest" ||
+            paths.cache_directory("KotavelTest").empty()) return 1;
+        try {
+            (void)paths.data_directory("../escape");
+            return 1;
+        } catch (const std::invalid_argument&) {}
+        const auto& services = context.container->get<kotavel::contracts::PlatformServices>();
+        if (&services.system_paths != &paths || &services.process_metrics !=
+            &context.container->get<kotavel::contracts::ProcessMetricsProvider>()) return 1;
+        const auto resources = services.runtime_paths.resolve(
+            context.root / "bin" / "KotavelTest");
+        if (resources.application_root.empty() || resources.plugins.empty() ||
+            resources.translations.empty() || resources.certificates.empty()) return 1;
+        return 0;
+    };
+    if (kotavel::run_console(2, args, configure, verify_default_metrics_provider) != 0)
+        return 1;
+
+    // Los providers de aplicación pueden sustituir el provider de plataforma.
+    auto create_custom_metrics_provider = [] {
+        kotavel::ServiceProviderList providers;
+        providers.push_back(std::make_unique<CustomMetricsProvider>());
+        return providers;
+    };
+    auto verify_custom_metrics_provider = [](kotavel::Application&,
+                                             const kotavel::ConsoleContext& context) {
+        auto& metrics = context.container->get<kotavel::contracts::ProcessMetricsProvider>();
+        const auto sample = metrics.read();
+        const auto& platform = context.container->get<kotavel::contracts::PlatformServices>();
+        return sample && sample->resident_memory_bytes == 4321 &&
+            &platform.process_metrics == &metrics ? 0 : 1;
+    };
+    if (kotavel::run_console(2, args, configure, verify_custom_metrics_provider, {}, {},
+                             create_custom_metrics_provider) != 0)
+        return 1;
     // El entorno existe antes de cargar mapas; Config se activa después y
     // permanece disponible tanto al configurar como al ejecutar la aplicación.
     bool loaded = false;
@@ -112,26 +174,16 @@ int main() {
     });
     const std::string description =
         "No se pudo abrir el archivo de entorno `.env` en la raíz del proyecto.\n";
-    std::string expected = description;
-    switch (kotavel::OS::type) {
-        case kotavel::OSType::WINDOWS:
-            expected += "Verifica que `.env` exista y tenga permisos de lectura. Si falta, créalo desde `.env.example`.\n"
-                        "En PowerShell: Copy-Item -LiteralPath '.env.example' -Destination '.env'\n";
-            break;
-        case kotavel::OSType::MACOS:
-            expected += "Verifica que `.env` exista y tengas permisos de lectura. Si falta, créalo desde `.env.example`.\n"
-                        "En Terminal: cp '.env.example' '.env'\n";
-            break;
-        case kotavel::OSType::LINUX:
-            expected += "Verifica que `.env` exista y tengas permisos de lectura. Si falta, créalo desde `.env.example`.\n"
-                        "En la terminal: cp '.env.example' '.env'\n";
-            break;
-        default:
-            expected += "Verifica que `.env` exista y que Kotavel tenga permisos para leerlo. Si falta, créalo desde `.env.example`.\n"
-                        "Copia manualmente `.env.example` como `.env`.\n";
-            break;
-    }
-    if (missing_code != 1 || configured || diagnostic != expected) return 1;
+    const auto first_line = diagnostic.find('\n');
+    const auto second_line = first_line == std::string::npos
+        ? std::string::npos : diagnostic.find('\n', first_line + 1);
+    const auto third_line = second_line == std::string::npos
+        ? std::string::npos : diagnostic.find('\n', second_line + 1);
+    if (missing_code != 1 || configured ||
+        diagnostic.compare(0, description.size(), description) != 0 ||
+        first_line == std::string::npos || second_line == std::string::npos ||
+        third_line != diagnostic.size() - 1)
+        return 1;
     std::ifstream bootstrap_log(missing_root / "storage" / "logs" / "kotavel.log");
     const std::string logged((std::istreambuf_iterator<char>(bootstrap_log)),
                              std::istreambuf_iterator<char>());

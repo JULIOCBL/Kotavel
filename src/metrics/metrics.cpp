@@ -1,14 +1,28 @@
 #include <kotavel/metrics/metrics.hpp>
-#include "process_metrics_internal.hpp"
+#include "../platform/platform_services.hpp"
 
 #include <stdexcept>
 #include <utility>
 
 namespace kotavel::metrics {
 
+ProcessMetricsCollector::ProcessMetricsCollector()
+    : owned_provider_(platform::detail::make_process_metrics_provider()),
+      provider_(owned_provider_.get()) {}
+
+ProcessMetricsCollector::ProcessMetricsCollector(
+    const contracts::ProcessMetricsProvider& provider)
+    : provider_(&provider) {}
+
+ProcessMetricsCollector::ProcessMetricsCollector(
+    std::shared_ptr<const contracts::ProcessMetricsProvider> provider)
+    : owned_provider_(std::move(provider)), provider_(owned_provider_.get()) {
+    if (!provider_) throw std::invalid_argument("Process metrics collector requires a provider");
+}
+
 std::optional<MetricsSample> ProcessMetricsCollector::sample() noexcept {
-    std::optional<detail::ProcessSnapshot> current;
-    try { current = detail::read_process_snapshot(); }
+    std::optional<contracts::ProcessMetricsSnapshot> current;
+    try { current = provider_->read(); }
     catch (...) { return std::nullopt; }
     if (!current) return std::nullopt;
 
@@ -16,7 +30,7 @@ std::optional<MetricsSample> ProcessMetricsCollector::sample() noexcept {
     MetricsSample result{now, std::nullopt, current->resident_memory_bytes};
     if (previous_cpu_time_ && previous_wall_time_) {
         const auto wall_delta = now - *previous_wall_time_;
-        const auto cpu_delta = current->process_cpu_time - *previous_cpu_time_;
+        const auto cpu_delta = current->cpu_time - *previous_cpu_time_;
         if (wall_delta > std::chrono::steady_clock::duration::zero() &&
             cpu_delta >= std::chrono::nanoseconds::zero()) {
             const auto wall_ns = std::chrono::duration<double, std::nano>(wall_delta).count();
@@ -24,7 +38,7 @@ std::optional<MetricsSample> ProcessMetricsCollector::sample() noexcept {
             result.process_cpu_percent = cpu_ns * 100.0 / wall_ns;
         }
     }
-    previous_cpu_time_ = current->process_cpu_time;
+    previous_cpu_time_ = current->cpu_time;
     previous_wall_time_ = now;
     return result;
 }

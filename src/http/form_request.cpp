@@ -1,4 +1,5 @@
 #include <kotavel/http/form_request.hpp>
+#include "../platform/host_resolver.hpp"
 
 #include <rapidjson/document.h>
 
@@ -18,14 +19,6 @@
 #include <string>
 #include <string_view>
 #include <vector>
-
-#if defined(_WIN32)
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#else
-#include <netdb.h>
-#include <sys/socket.h>
-#endif
 
 namespace kotavel::http {
 namespace {
@@ -276,25 +269,6 @@ bool valid_url(std::string_view value) {
     return true;
 }
 
-bool resolves_host(std::string_view host) {
-#if defined(_WIN32)
-    // Winsock requires process initialization before getaddrinfo can be used.
-    static const bool winsock_ready = [] {
-        WSADATA data{};
-        return WSAStartup(MAKEWORD(2, 2), &data) == 0;
-    }();
-    if (!winsock_ready) return false;
-#endif
-    const std::string name(host);
-    addrinfo hints{};
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_family = AF_UNSPEC;
-    addrinfo* results = nullptr;
-    const int status = getaddrinfo(name.c_str(), nullptr, &hints, &results);
-    if (results) freeaddrinfo(results);
-    return status == 0;
-}
-
 std::string_view url_host(std::string_view value) {
     const auto scheme = value.find("://");
     if (scheme == std::string_view::npos) return {};
@@ -501,7 +475,7 @@ bool accepts(const Request& request, std::string_view field, std::string_view va
         if (!syntax) return false;
         const auto styles = split(argument);
         if (std::find(styles.begin(), styles.end(), "dns") != styles.end())
-            return resolves_host(domain);
+            return platform::detail::resolves_host(domain);
         return styles.empty() || std::all_of(styles.begin(), styles.end(), [](auto style) {
             return style == "rfc" || style == "strict" || style == "filter";
         });
@@ -559,7 +533,8 @@ bool accepts(const Request& request, std::string_view field, std::string_view va
         return true;
     }
     if (rule == "url") return valid_url(value);
-    if (rule == "active_url") return valid_url(value) && resolves_host(url_host(value));
+    if (rule == "active_url")
+        return valid_url(value) && platform::detail::resolves_host(url_host(value));
     if (rule == "ip") return valid_ip(value);
     if (rule == "ipv4") return valid_ip(value, 4);
     if (rule == "ipv6") return valid_ip(value, 6);

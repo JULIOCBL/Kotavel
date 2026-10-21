@@ -2,6 +2,7 @@
 """Exercise the C++ metrics stream through a loopback client on every OS."""
 
 import json
+import errno
 from pathlib import Path
 import socket
 import subprocess
@@ -12,6 +13,17 @@ import time
 
 def main() -> int:
     executable = sys.argv[1]
+    # Some CI sandboxes prohibit loopback sockets; report a CTest skip only when
+    # the environment itself blocks the transport before the fixture is started.
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(('127.0.0.1', 0))
+    except OSError as error:
+        if error.errno in (errno.EPERM, errno.EACCES, 10013):
+            print(f'Loopback sockets are unavailable in this environment: {error}', file=sys.stderr)
+            return 77
+        raise
+
     with tempfile.TemporaryDirectory(prefix='kotavel-metrics-stream-') as temporary:
         root = Path(temporary)
         process = subprocess.Popen(

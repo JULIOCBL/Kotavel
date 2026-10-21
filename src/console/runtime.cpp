@@ -7,11 +7,11 @@
 
 #include <kotavel/system/os.hpp>
 #include <kotavel/diagnostics/bootstrap_logger.hpp>
+#include "../platform/platform_services.hpp"
+#include "../platform/application_bundle.hpp"
 
 #include <array>
-#include <cstdlib>
 #include <filesystem>
-#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <mutex>
@@ -22,54 +22,6 @@
 namespace kotavel {
 namespace {
 std::mutex metrics_output_mutex;
-
-struct InstalledBundle final {
-    std::filesystem::path resources;
-    std::filesystem::path data;
-    std::string environment = "production";
-};
-
-std::optional<InstalledBundle> installed_bundle(const char* executable) {
-    if (!executable || !*executable) return std::nullopt;
-    auto binary = std::filesystem::path(executable);
-    if (binary.is_relative()) binary = std::filesystem::absolute(binary);
-    const auto macos = binary.parent_path();
-    const auto contents = macos.parent_path();
-    const auto bundle = contents.parent_path();
-    if (macos.filename() != "MacOS" || contents.filename() != "Contents" ||
-        bundle.extension() != ".app")
-        return std::nullopt;
-
-    const auto resources = contents / "Resources";
-    if (!std::filesystem::is_directory(resources) ||
-        !std::filesystem::is_regular_file(resources / "kotavel-environment"))
-        return std::nullopt;
-
-    std::string environment = "production";
-    std::ifstream selection(resources / "kotavel-environment", std::ios::binary);
-    if (selection) {
-        std::getline(selection, environment);
-        while (!environment.empty() && (environment.back() == '\r' || environment.back() == ' ' || environment.back() == '\t'))
-            environment.pop_back();
-        const auto first = environment.find_first_not_of(" \t");
-        if (first != std::string::npos) environment.erase(0, first);
-        if (environment != "production" && environment != "local" && environment != "development")
-            throw std::runtime_error("Application bundle has an invalid kotavel-environment value");
-    }
-
-    const char* home = std::getenv("HOME");
-    if (!home || !*home) throw std::runtime_error("HOME is unavailable for the application data directory");
-    const auto data = std::filesystem::path(home) / "Library" / "Application Support" / bundle.stem();
-    std::filesystem::create_directories(data);
-    const auto filename = environment == "production" ? ".env" : ".env." + environment;
-    const auto bundled_environment = resources / filename;
-    if (!std::filesystem::is_regular_file(bundled_environment))
-        throw std::runtime_error("Application bundle is missing " + filename);
-    const auto user_environment = data / filename;
-    if (!std::filesystem::exists(user_environment))
-        std::filesystem::copy_file(bundled_environment, user_environment);
-    return InstalledBundle{resources, data, std::move(environment)};
-}
 
 // Al cerrar, cada proveedor libera primero los recursos que dependen de otros.
 class ProviderLifecycle final {
@@ -137,8 +89,8 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
             if (!application_help.empty()) std::cout << application_help << '\n';
             return 0;
         }
-        std::optional<InstalledBundle> bundle;
-        if (options.root.empty()) bundle = installed_bundle(argv[0]);
+        std::optional<platform::detail::InstalledBundle> bundle;
+        if (options.root.empty()) bundle = platform::detail::installed_bundle(argv[0]);
         if (!options.environment_explicit && bundle)
             options.environment = bundle->environment;
         auto root = std::move(options.root);
@@ -188,9 +140,14 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
         services.instance<Application>(std::make_shared<Application>(
             std::move(settings.logs), std::move(settings.errors)));
         phase = "register_services";
-        ProviderLifecycle providers(services, create_providers ? create_providers()
+        ServiceProviderList framework_provider_list;
+        framework_provider_list.push_back(platform::detail::make_platform_service_provider());
+        ProviderLifecycle framework_providers(services, std::move(framework_provider_list));
+        ProviderLifecycle application_providers(services, create_providers ? create_providers()
             : std::vector<std::unique_ptr<ServiceProvider>>{});
-        providers.register_services();
+        // Primero se registran providers de la aplicación para que puedan sustituir fallbacks.
+        application_providers.register_services();
+        framework_providers.register_services();
         services.seal();
         Application& application = services.get<Application>();
         // Exponer el contenedor solo después de completar todos los registros.
@@ -199,7 +156,8 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
         application.boot();
         // Los proveedores arrancan después de Application y antes del callback consumidor.
         phase = "boot_services";
-        providers.boot();
+        framework_providers.boot();
+        application_providers.boot();
         startup.application_boot = std::chrono::duration_cast<std::chrono::nanoseconds>(
             Clock::now() - boot_started);
         startup.total = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -232,6 +190,9 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
 
         // El monitor arranca cuando Application está lista y se detiene antes del cierre.
         metrics::MetricsMonitor monitor;
+        const contracts::ProcessMetricsProvider* process_metrics = nullptr;
+        if (settings.metrics.enabled)
+            process_metrics = &services.get<contracts::ProcessMetricsProvider>();
         if (settings.metrics.enabled && settings.metrics.startup) {
             if (stream && stream->running()) stream->publish_startup(startup);
             if (print_metrics_to_console) {
@@ -266,7 +227,7 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
                 std::cout << output.str() << std::flush;
             };
             // Mostrar la RAM inicial aunque el monitor se conecte después.
-            metrics::ProcessMetricsCollector initial_collector;
+            metrics::ProcessMetricsCollector initial_collector(*process_metrics);
             if (const auto initial = initial_collector.sample()) publish_sample(*initial);
             monitor.start(settings.metrics.interval, publish_sample, std::move(initial_collector));
         }
@@ -277,7 +238,8 @@ int run_console(int argc, char** argv, const ConfigureConsole& configure,
             (application.last_error() && !application.last_error()->recoverable);
         monitor.stop();
         if (stream) stream->stop();
-        providers.shutdown();
+        application_providers.shutdown();
+        framework_providers.shutdown();
         application.shutdown();
         services.shutdown();
         return failed && code == 0 ? 1 : code;

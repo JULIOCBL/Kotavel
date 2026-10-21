@@ -1,10 +1,12 @@
 # Salidas de CMake y Conan locales al repositorio.
 /build/
+/cmake-build-*/
 /CMakeUserPresets.json
 /CMakeCache.txt
 /CMakeFiles/
 /Testing/
 /compile_commands.json
+/.conan2/
 
 # Entorno y artefactos generados por Python.
 /.kotavel/

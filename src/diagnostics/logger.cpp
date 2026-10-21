@@ -28,7 +28,7 @@ Logger::Logger(LogOptions options) : options_(std::move(options)) {
     validate_throttle(options_.throttle);
     if (!options_.enabled || !options_.file) return;
     std::filesystem::create_directories(options_.directory);
-    lease_ = std::make_unique<DirectoryLease>(options_.directory);
+    lease_ = create_directory_lease(options_.directory);
     std::ofstream probe(options_.directory / "kotavel.log", std::ios::app | std::ios::binary);
     if (!probe) throw std::runtime_error("Cannot open Kotavel log file");
 }

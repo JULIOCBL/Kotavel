@@ -1,5 +1,6 @@
 #include <kotavel/http/server.hpp>
 #include <kotavel/http/api_response.hpp>
+#include "../platform/utc_time.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -128,11 +129,7 @@ void print_access_log(const Request& request, int status,
             std::chrono::duration_cast<std::chrono::milliseconds>(timestamp - whole_seconds).count();
         const auto time_value = std::chrono::system_clock::to_time_t(received_at);
         std::tm utc_time{};
-#if defined(_WIN32)
-        const bool has_utc_time = gmtime_s(&utc_time, &time_value) == 0;
-#else
-        const bool has_utc_time = gmtime_r(&time_value, &utc_time) != nullptr;
-#endif
+        const bool has_utc_time = platform::detail::to_utc_time(time_value, utc_time);
 
         // Sanitizar controles evita que una ruta pueda falsificar líneas en la terminal.
         std::string printable_path(request.path());

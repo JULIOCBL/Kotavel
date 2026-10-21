@@ -1,4 +1,5 @@
 #include "log_formatter.hpp"
+#include "../platform/utc_time.hpp"
 
 #include <algorithm>
 #include <ctime>
@@ -174,11 +175,7 @@ std::string format_log_record(const LogRecord& record, std::string_view module,
                              const char* name, std::uintmax_t max_bytes) {
     const auto now = std::time(nullptr);
     std::tm utc{};
-#ifdef _WIN32
-    if (gmtime_s(&utc, &now) != 0) throw std::runtime_error("Invalid clock");
-#else
-    if (!gmtime_r(&now, &utc)) throw std::runtime_error("Invalid clock");
-#endif
+    if (!platform::detail::to_utc_time(now, utc)) throw std::runtime_error("Invalid clock");
     char timestamp[32];
     if (!std::strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &utc))
         throw std::runtime_error("Invalid timestamp");
