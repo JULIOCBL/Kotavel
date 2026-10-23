@@ -37,6 +37,9 @@ class WindowsPlatform(PlatformAdapter):
         return shlex.split(result.stdout.strip(), posix=False)
 
     def request_process_stop(self, process_id):
+        if self._send_console_break(process_id):
+            return
+
         helper = r'''import ctypes, sys, time
 k = ctypes.windll.kernel32
 pid = int(sys.argv[1])
@@ -49,8 +52,45 @@ k.FreeConsole()
         result = subprocess.run([sys.executable, '-c', helper, str(process_id)],
                                 creationflags=subprocess.CREATE_NO_WINDOW,
                                 capture_output=True, text=True, check=False)
-        if result.returncode != 0:
-            raise RuntimeError('No se pudo enviar el cierre ordenado a la consola de Kotavel.')
+        if result.returncode == 0 or self._post_close_to_process_windows(process_id):
+            return
+        raise RuntimeError('No se pudo enviar el cierre ordenado a la aplicación Kotavel.')
+
+    @staticmethod
+    def _send_console_break(process_id):
+        kernel = ctypes.windll.kernel32
+        kernel.GenerateConsoleCtrlEvent.argtypes = [ctypes.c_uint, ctypes.c_ulong]
+        kernel.GenerateConsoleCtrlEvent.restype = ctypes.c_int
+        return bool(kernel.GenerateConsoleCtrlEvent(1, process_id))  # CTRL_BREAK_EVENT
+
+    @staticmethod
+    def _post_close_to_process_windows(process_id):
+        user32 = ctypes.windll.user32
+        callback_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_ssize_t)
+        user32.GetWindowThreadProcessId.argtypes = [
+            ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+        user32.GetWindowThreadProcessId.restype = ctypes.c_ulong
+        user32.PostMessageW.argtypes = [
+            ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
+        user32.PostMessageW.restype = ctypes.c_int
+        user32.EnumWindows.argtypes = [callback_type, ctypes.c_ssize_t]
+        user32.EnumWindows.restype = ctypes.c_bool
+        posted = False
+
+        def close_window(window, _):
+            nonlocal posted
+            owner = ctypes.c_ulong()
+            user32.GetWindowThreadProcessId(window, ctypes.byref(owner))
+            if owner.value == process_id and user32.PostMessageW(window, 0x0010, 0, 0):
+                posted = True
+            return True
+
+        callback = callback_type(close_window)
+        if not user32.EnumWindows(callback, 0):
+            error = ctypes.get_last_error()
+            if error:
+                raise ctypes.WinError(error)
+        return posted
 
     def force_process_stop(self, process_id):
         kernel = ctypes.windll.kernel32
@@ -89,13 +129,31 @@ k.FreeConsole()
         process = subprocess.Popen(command, cwd=cwd, env=env,
                                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
         try:
-            result = process.wait()
+            result = self._wait_for_process(process)
         except KeyboardInterrupt:
-            self.request_process_stop(process.pid)
-            process.wait(timeout=10)
+            # CTRL+C is delivered to this CLI process, not to the isolated
+            # process group. Relay a break first, then ensure a stuck API
+            # cannot be left running after the terminal returns.
+            try:
+                self.request_process_stop(process.pid)
+                process.wait(timeout=3)
+            except (OSError, RuntimeError, subprocess.TimeoutExpired):
+                self.force_process_stop(process.pid)
+                process.wait(timeout=5)
             raise
         if result != 0:
             raise subprocess.CalledProcessError(result, command)
+
+    @staticmethod
+    def _wait_for_process(process):
+        # An unbounded WaitForSingleObject on Windows does not return to Python
+        # to dispatch Ctrl+C. Short bounded waits keep the foreground CLI
+        # responsive while avoiding a busy loop.
+        while True:
+            try:
+                return process.wait(timeout=0.2)
+            except subprocess.TimeoutExpired:
+                continue
 
     def compiler_machine(self):
         return sysconfig.get_platform().removeprefix('win-')
