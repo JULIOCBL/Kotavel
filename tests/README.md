@@ -177,3 +177,12 @@ falso, así que no abre sockets.
 parámetros `q`, precedencia de `q=0`, valores mal formados, 404, 405, OPTIONS y
 errores de JSON. Verifica que un 406 incluya el formato de error correspondiente
 y se produzca antes del middleware o handler.
+
+
+Las pruebas de adaptadores específicas por sistema están en `platforms/linux`, `platforms/macos` y `platforms/windows`. La suite completa conserva el descubrimiento automático: cada runner ejecuta las pruebas de su sistema y marca las demás como omitidas. También se pueden ejecutar por separado desde la raíz del repositorio:
+
+```sh
+python3 -m unittest discover -s tests/platforms/linux -p "test_*.py"
+python3 -m unittest discover -s tests/platforms/macos -p "test_*.py"
+python3 -m unittest discover -s tests/platforms/windows -p "test_*.py"
+```
