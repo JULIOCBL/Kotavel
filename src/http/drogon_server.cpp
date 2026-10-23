@@ -1,5 +1,7 @@
 #include <kotavel/http/server.hpp>
 
+#include "route_method_index.hpp"
+
 #include <drogon/drogon.h>
 #include <atomic>
 #include <chrono>
@@ -21,35 +23,6 @@ std::string_view request_method(const drogon::HttpRequestPtr& request) {
     return request->isHead() ? "HEAD" : request->methodString();
 }
 
-bool route_path_matches(std::string_view pattern, std::string_view path) {
-    std::size_t pattern_start = 0;
-    std::size_t path_start = 0;
-    while (pattern_start < pattern.size() || path_start < path.size()) {
-        if (pattern_start == pattern.size() || path_start == path.size())
-            return pattern_start == pattern.size() && path_start == path.size();
-
-        const auto pattern_end = pattern.find('/', pattern_start);
-        const auto path_end = path.find('/', path_start);
-        const auto pattern_segment = pattern.substr(
-            pattern_start, pattern_end == std::string_view::npos
-                ? pattern.size() - pattern_start : pattern_end - pattern_start);
-        const auto path_segment = path.substr(
-            path_start, path_end == std::string_view::npos
-                ? path.size() - path_start : path_end - path_start);
-
-        const bool parameter = pattern_segment.size() >= 2 &&
-            pattern_segment.front() == '{' && pattern_segment.back() == '}';
-        if (!parameter && pattern_segment != path_segment) return false;
-        if (parameter && path_segment.empty()) return false;
-
-        if (pattern_end == std::string_view::npos || path_end == std::string_view::npos)
-            return pattern_end == path_end;
-        pattern_start = pattern_end + 1;
-        path_start = path_end + 1;
-    }
-    return true;
-}
-
 std::optional<Method> to_kotavel_method(drogon::HttpMethod method) {
     switch (method) {
         case drogon::Get:
@@ -60,6 +33,30 @@ std::optional<Method> to_kotavel_method(drogon::HttpMethod method) {
         case drogon::Delete: return Method::delete_;
         default: return std::nullopt;
     }
+}
+
+void copy_request_headers(const drogon::HttpRequestPtr& incoming, RequestData& data) {
+    for (const auto& [name, value] : incoming->headers())
+        data.headers.insert_or_assign(name, value);
+
+    // Preserve the raw Cookie header when the adapter exposes it. Some Drogon
+    // request paths expose parsed cookies separately, so rebuild the standard
+    // header from that parsed map as a fallback for framework middleware.
+    const auto& cookie = incoming->getHeader("cookie");
+    if (!cookie.empty()) {
+        data.headers.insert_or_assign("cookie", cookie);
+        return;
+    }
+
+    std::string parsed_cookie_header;
+    for (const auto& [name, value] : incoming->cookies()) {
+        if (!parsed_cookie_header.empty()) parsed_cookie_header += "; ";
+        parsed_cookie_header += name;
+        parsed_cookie_header += '=';
+        parsed_cookie_header += value;
+    }
+    if (!parsed_cookie_header.empty())
+        data.headers.insert_or_assign("cookie", std::move(parsed_cookie_header));
 }
 
 drogon::HttpMethod to_drogon_method(Method method) {
@@ -80,6 +77,7 @@ drogon::HttpResponsePtr to_drogon_response(Response response) {
     result->setStatusCode(static_cast<drogon::HttpStatusCode>(status));
     result->setContentTypeString(response.content_type);
     result->setBody(std::move(response.body));
+    for (const auto& [name, value] : response.headers) result->addHeader(name, value);
     return result;
 }
 
@@ -92,8 +90,7 @@ Request request_from_transport(const drogon::HttpRequestPtr& incoming,
     data.body = std::string(incoming->body());
     data.raw_method = std::string(request_method(incoming));
     data.query_string = incoming->query();
-    for (const auto& [name, value] : incoming->headers())
-        data.headers.insert_or_assign(name, value);
+    copy_request_headers(incoming, data);
 
     const auto& captures = incoming->getRoutingParameters();
     std::size_t capture_index = 0;
@@ -115,16 +112,16 @@ Request request_from_transport(const drogon::HttpRequestPtr& incoming,
     return Request(std::move(data));
 }
 
-Request request_from_transport(const drogon::HttpRequestPtr& incoming) {
-    const auto path = incoming->path();
+// Error negotiation only needs the method, path and Accept header. Do not copy
+// or parse an upload merely to return 404/405.
+Request request_metadata_from_transport(const drogon::HttpRequestPtr& incoming) {
     RequestData data;
-    data.kind = path == "/api" || path.starts_with("/api/") ? RouteKind::api : RouteKind::web;
-    data.path = path;
-    data.body = std::string(incoming->body());
+    data.method = to_kotavel_method(incoming->method()).value_or(Method::get);
+    data.path = incoming->path();
+    data.kind = data.path == "/api" || data.path.starts_with("/api/") ? RouteKind::api : RouteKind::web;
     data.raw_method = std::string(request_method(incoming));
-    data.query_string = incoming->query();
-    for (const auto& [name, value] : incoming->headers())
-        data.headers.insert_or_assign(name, value);
+    const auto& accept = incoming->getHeader("accept");
+    if (!accept.empty()) data.headers.emplace("accept", accept);
     return Request(std::move(data));
 }
 
@@ -139,34 +136,19 @@ public:
         try {
             auto& application = drogon::app();
             if (settings.threads > 0) application.setThreadNum(settings.threads);
-            application.registerPreRoutingAdvice([&kernel](
+            const auto route_index = std::make_shared<const detail::RouteMethodIndex>(kernel.routes().routes());
+            application.registerPreRoutingAdvice([&kernel, route_index](
                     const drogon::HttpRequestPtr& request,
                     drogon::AdviceCallback&& callback,
                     drogon::AdviceChainCallback&& chain) {
-                const auto& routes = kernel.routes().routes();
-                bool path_is_registered = false;
-                bool method_is_registered = false;
-                const auto method = to_kotavel_method(request->method());
-                for (const auto& route : routes) {
-                    if (!route_path_matches(route.path, request->path())) continue;
-                    path_is_registered = true;
-                    if (method && route.method == *method) {
-                        method_is_registered = true;
-                        break;
-                    }
-                }
-                if (!path_is_registered || method_is_registered) {
+                request->attributes()->insert(request_timing_attribute,
+                    RequestTiming{std::chrono::system_clock::now(), std::chrono::steady_clock::now()});
+                if (!route_index->rejects(request->path(), to_kotavel_method(request->method()))) {
                     chain();
                     return;
                 }
-
-                const auto view = request_from_transport(request);
+                const auto view = request_metadata_from_transport(request);
                 callback(to_drogon_response(kernel.method_not_allowed(view)));
-            });
-            application.registerPreRoutingAdvice([](const drogon::HttpRequestPtr& request) {
-                request->attributes()->insert(request_timing_attribute,
-                    RequestTiming{std::chrono::system_clock::now(),
-                                  std::chrono::steady_clock::now()});
             });
             application.registerPreSendingAdvice([&kernel](
                     const drogon::HttpRequestPtr& request,
@@ -177,8 +159,8 @@ public:
                 RequestTiming timing{now_system, now_steady};
                 if (attributes && attributes->find(request_timing_attribute))
                     timing = attributes->get<RequestTiming>(request_timing_attribute);
-                const auto view = request_from_transport(request);
-                kernel.log_access(view, static_cast<int>(response->statusCode()),
+                kernel.log_access(request_method(request), request->path(),
+                                  static_cast<int>(response->statusCode()),
                                   timing.received_at, now_steady - timing.started_at);
             });
             for (const auto& route : kernel.routes().routes()) {
@@ -193,7 +175,7 @@ public:
             application.setDefaultHandler(
                 [&kernel](const drogon::HttpRequestPtr& request,
                           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-                    const auto view = request_from_transport(request);
+                    const auto view = request_metadata_from_transport(request);
                     callback(to_drogon_response(kernel.not_found(view)));
                 });
             application.addListener(settings.host, settings.port);

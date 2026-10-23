@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import sysconfig
 from contextlib import contextmanager
 
@@ -21,6 +22,80 @@ class WindowsPlatform(PlatformAdapter):
     python_executable = 'python.exe'
     conan_executable = 'conan.exe'
     activation_kind = 'powershell'
+
+    def process_command_line(self, process_id):
+        shell = shutil.which('powershell') or shutil.which('pwsh')
+        if not shell:
+            raise RuntimeError('Se necesita PowerShell para identificar la instancia de Kotavel.')
+        command = ("$p = Get-CimInstance Win32_Process -Filter 'ProcessId = " +
+                   str(process_id) + "'; if ($p) { $p.CommandLine }")
+        result = subprocess.run([shell, '-NoProfile', '-NonInteractive', '-Command', command],
+                                capture_output=True, text=True, check=False)
+        if result.returncode != 0 or not result.stdout.strip():
+            return None
+        import shlex
+        return shlex.split(result.stdout.strip(), posix=False)
+
+    def request_process_stop(self, process_id):
+        helper = r'''import ctypes, sys, time
+k = ctypes.windll.kernel32
+pid = int(sys.argv[1])
+k.SetConsoleCtrlHandler(None, True)
+if not k.AttachConsole(pid): raise SystemExit(2)
+if not k.GenerateConsoleCtrlEvent(1, pid): raise SystemExit(3)
+time.sleep(0.2)
+k.FreeConsole()
+'''
+        result = subprocess.run([sys.executable, '-c', helper, str(process_id)],
+                                creationflags=subprocess.CREATE_NO_WINDOW,
+                                capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            raise RuntimeError('No se pudo enviar el cierre ordenado a la consola de Kotavel.')
+
+    def force_process_stop(self, process_id):
+        kernel = ctypes.windll.kernel32
+        kernel.OpenProcess.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
+        kernel.OpenProcess.restype = ctypes.c_void_p
+        kernel.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+        kernel.TerminateProcess.restype = ctypes.c_int
+        kernel.CloseHandle.argtypes = [ctypes.c_void_p]
+        handle = kernel.OpenProcess(0x0001, False, process_id)  # PROCESS_TERMINATE
+        if not handle:
+            if kernel.GetLastError() == 87:
+                return
+            raise RuntimeError('No se pudo abrir el proceso de Kotavel para cerrarlo.')
+        try:
+            if not kernel.TerminateProcess(handle, 1):
+                raise RuntimeError('Windows no pudo terminar el proceso de Kotavel.')
+        finally:
+            kernel.CloseHandle(handle)
+
+    def process_is_running(self, process_id):
+        kernel = ctypes.windll.kernel32
+        kernel.OpenProcess.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
+        kernel.OpenProcess.restype = ctypes.c_void_p
+        kernel.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        kernel.WaitForSingleObject.restype = ctypes.c_ulong
+        kernel.CloseHandle.argtypes = [ctypes.c_void_p]
+        handle = kernel.OpenProcess(0x00100000, False, process_id)  # SYNCHRONIZE
+        if not handle:
+            return kernel.GetLastError() != 87  # ERROR_INVALID_PARAMETER means exited.
+        try:
+            return kernel.WaitForSingleObject(handle, 0) != 0
+        finally:
+            kernel.CloseHandle(handle)
+
+    def run_application(self, command, *, cwd, env):
+        process = subprocess.Popen(command, cwd=cwd, env=env,
+                                   creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+        try:
+            result = process.wait()
+        except KeyboardInterrupt:
+            self.request_process_stop(process.pid)
+            process.wait(timeout=10)
+            raise
+        if result != 0:
+            raise subprocess.CalledProcessError(result, command)
 
     def compiler_machine(self):
         return sysconfig.get_platform().removeprefix('win-')

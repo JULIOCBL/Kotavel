@@ -115,6 +115,9 @@ class KotavelConan(ConanFile):
         contract.set_property("cmake_target_name", "Kotavel::HttpContract")
         contract.libs = ["kotavel_http_contract"]
         contract.requires = ["core"]
+        if self.settings.os == "Windows":
+            # Session adapter uses BCryptGenRandom and user-specific filesystem ACLs.
+            contract.system_libs = ["bcrypt", "advapi32"]
         desktop = self.cpp_info.components["desktop"]
         desktop.set_property("cmake_target_name", "Kotavel::Desktop")
         desktop.libs = ["kotavel_desktop"]

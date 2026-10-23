@@ -1,23 +1,60 @@
 #include <kotavel/metrics/metrics.hpp>
+#include <kotavel/filesystem/filesystem.hpp>
 
+#include "metrics_endpoint.hpp"
 #include "../platform/metrics_stream_transport.hpp"
 
 #include <atomic>
+#include <charconv>
 #include <cmath>
-#include <fstream>
 #include <iomanip>
 #include <locale>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <utility>
 
 namespace kotavel::metrics {
+namespace detail {
+std::optional<std::uint64_t> endpoint_process_id(const std::filesystem::path& path) {
+    const auto name = path.filename().string();
+    constexpr std::string_view prefix = "kotavel-";
+    constexpr std::string_view suffix = ".endpoint";
+    if (!name.starts_with(prefix) || !name.ends_with(suffix) ||
+        name.size() <= prefix.size() + suffix.size()) return std::nullopt;
+    const auto digits = std::string_view(name).substr(
+        prefix.size(), name.size() - prefix.size() - suffix.size());
+    std::uint64_t process_id = 0;
+    const auto [end, error] = std::from_chars(digits.data(), digits.data() + digits.size(), process_id);
+    if (error != std::errc{} || end != digits.data() + digits.size() || process_id == 0)
+        return std::nullopt;
+    return process_id;
+}
+
+void remove_stale_endpoints(const std::filesystem::path& directory,
+                            std::uint64_t current_process_id,
+                            ProcessIsRunning process_is_running) noexcept {
+    std::error_code error;
+    std::filesystem::directory_iterator entry(directory, error);
+    const std::filesystem::directory_iterator end;
+    while (!error && entry != end) {
+        const auto process_id = endpoint_process_id(entry->path());
+        if (process_id && *process_id != current_process_id &&
+            !process_is_running(*process_id)) {
+            std::error_code ignored;
+            std::filesystem::remove(entry->path(), ignored);
+        }
+        entry.increment(error);
+    }
+}
+} // namespace detail
 
 struct MetricsStream::Impl {
     std::filesystem::path endpoint;
+    filesystem::LocalFilesystem filesystem;
     std::unique_ptr<platform::detail::LocalMetricsServer> server =
         platform::detail::make_local_metrics_server();
     std::thread worker;
@@ -83,16 +120,18 @@ void MetricsStream::start(const std::filesystem::path& project_root) {
         throw std::logic_error("Metrics stream is already running");
 
     const auto directory = project_root / "storage" / "framework" / "metrics";
-    std::filesystem::create_directories(directory);
+    impl_->filesystem.create_directories(directory, true);
     const auto process_id = platform::detail::current_process_id();
+    detail::remove_stale_endpoints(directory, process_id,
+                                   platform::detail::process_is_running);
     impl_->endpoint = directory / ("kotavel-" + std::to_string(process_id) + ".endpoint");
     const auto port = impl_->server->start_loopback();
-    {
-        std::ofstream descriptor(impl_->endpoint, std::ios::trunc);
-        if (!descriptor || !(descriptor << port << '\n')) {
-            stop();
-            throw std::runtime_error("Could not publish local metrics endpoint");
-        }
+    try {
+        impl_->filesystem.write_file_atomically(impl_->endpoint,
+                                                 std::to_string(port) + "\n", true);
+    } catch (...) {
+        stop();
+        throw;
     }
     {
         std::lock_guard lock(impl_->sample_mutex);
@@ -155,8 +194,8 @@ void MetricsStream::stop() noexcept {
     if (impl_->worker.joinable()) impl_->worker.join();
     impl_->server->stop();
     if (!impl_->endpoint.empty()) {
-        std::error_code error;
-        std::filesystem::remove(impl_->endpoint, error);
+        try { (void)impl_->filesystem.remove_file(impl_->endpoint); }
+        catch (...) {}
         impl_->endpoint.clear();
     }
     impl_->active.store(false, std::memory_order_release);

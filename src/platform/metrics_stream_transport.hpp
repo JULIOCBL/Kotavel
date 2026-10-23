@@ -24,5 +24,8 @@ public:
 
 [[nodiscard]] std::unique_ptr<LocalMetricsServer> make_local_metrics_server();
 [[nodiscard]] std::uint64_t current_process_id() noexcept;
+// Returns false only when the PID is known to have exited; uncertain states
+// are treated as live so endpoint cleanup never removes another process's file.
+[[nodiscard]] bool process_is_running(std::uint64_t process_id) noexcept;
 
 } // namespace kotavel::platform::detail

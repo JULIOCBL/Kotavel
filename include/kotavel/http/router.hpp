@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
+#include <map>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -16,6 +17,7 @@ struct Response {
     int status = 200;
     std::string content_type = "text/plain; charset=utf-8";
     std::string body;
+    std::map<std::string, std::string, std::less<>> headers;
 };
 
 using Handler = std::function<Response(const Request&)>;

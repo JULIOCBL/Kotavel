@@ -15,7 +15,7 @@ args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 sources = sorted([*root.glob("src/**/*.cpp"), *root.glob("src/**/*.hpp"),
                   *root.glob("include/**/*.hpp"), root / "CMakeLists.txt",
-                  root / "benchmarks/core_benchmark.cpp"])
+                  *root.glob("benchmarks/*.cpp")])
 digest = hashlib.sha256()
 for path in sources:
     digest.update(path.relative_to(root).as_posix().encode())

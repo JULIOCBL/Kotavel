@@ -9,6 +9,8 @@
 
 namespace kotavel::http {
 
+class Session;
+
 enum class Method { get, post, put, patch, delete_ };
 enum class RouteKind { api, web };
 
@@ -60,6 +62,7 @@ public:
     [[nodiscard]] std::vector<std::string> array_keys(std::string_view key) const;
     [[nodiscard]] bool has_valid_input() const noexcept { return input_valid_; }
     [[nodiscard]] std::map<std::string, std::string> all() const;
+    [[nodiscard]] Session& session() const;
 
 private:
     Method method_;
@@ -68,15 +71,15 @@ private:
     std::string body_;
     std::string raw_method_;
     std::string query_string_;
-    std::map<std::string, std::string> headers_;
+    std::map<std::string, std::string, std::less<>> headers_;
     std::map<std::string, std::string> route_parameters_;
-    std::map<std::string, std::optional<std::string>> query_values_;
-    std::map<std::string, std::optional<std::string>> body_values_;
-    std::set<std::string> body_arrays_;
-    std::set<std::string> body_objects_;
-    std::map<std::string, std::vector<std::string>> body_array_values_;
-    std::map<std::string, std::vector<std::string>> body_object_keys_;
-    std::map<std::string, UploadedFile> files_;
+    std::map<std::string, std::optional<std::string>, std::less<>> query_values_;
+    std::map<std::string, std::optional<std::string>, std::less<>> body_values_;
+    std::set<std::string, std::less<>> body_arrays_;
+    std::set<std::string, std::less<>> body_objects_;
+    std::map<std::string, std::vector<std::string>, std::less<>> body_array_values_;
+    std::map<std::string, std::vector<std::string>, std::less<>> body_object_keys_;
+    std::map<std::string, UploadedFile, std::less<>> files_;
     bool input_valid_ = true;
 };
 

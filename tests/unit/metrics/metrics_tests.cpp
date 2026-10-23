@@ -1,11 +1,15 @@
 #include <kotavel/metrics/metrics.hpp>
+#include "metrics/metrics_endpoint.hpp"
 
 #include <atomic>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <mutex>
+#include <set>
 #include <stdexcept>
 #include <thread>
 #include <utility>
@@ -14,6 +18,11 @@ namespace {
 using namespace std::chrono_literals;
 using kotavel::metrics::MetricsMonitor;
 using kotavel::metrics::ProcessMetricsCollector;
+
+const std::set<std::uint64_t> live_processes{202};
+bool fake_process_is_running(std::uint64_t process_id) noexcept {
+    return live_processes.contains(process_id);
+}
 
 class FixedMetricsProvider final : public kotavel::contracts::ProcessMetricsProvider {
 public:
@@ -180,6 +189,65 @@ void check_stop_from_callback() {
     check(!monitor.running(), "Self-stop did not change the running state");
     monitor.stop(); // Join from the owner thread after the callback returns.
 }
+
+void check_metrics_endpoint_cleanup() {
+    using kotavel::metrics::detail::endpoint_process_id;
+    using kotavel::metrics::detail::remove_stale_endpoints;
+
+    check(endpoint_process_id("kotavel-202.endpoint") == 202,
+          "Endpoint parser did not read a valid process identifier");
+    check(!endpoint_process_id("other-202.endpoint"),
+          "Endpoint parser accepted an unexpected prefix");
+    check(!endpoint_process_id("kotavel-0.endpoint"),
+          "Endpoint parser accepted PID zero");
+    check(!endpoint_process_id("kotavel-202.extra.endpoint"),
+          "Endpoint parser accepted a nonnumeric PID");
+    check(!endpoint_process_id("kotavel-202.txt"),
+          "Endpoint parser accepted an unexpected suffix");
+
+    const auto root = std::filesystem::temp_directory_path() /
+        ("kotavel-metrics-endpoint-tests-" + std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto write_file = [](const std::filesystem::path& path) {
+        std::ofstream output(path);
+        if (!output) throw std::runtime_error("Could not create metrics endpoint test file");
+        output << "12345\n";
+    };
+
+    try {
+        std::filesystem::create_directories(root);
+        const auto stale = root / "kotavel-101.endpoint";
+        const auto live = root / "kotavel-202.endpoint";
+        const auto current = root / "kotavel-303.endpoint";
+        const auto malformed = root / "kotavel-not-a-pid.endpoint";
+        const auto unrelated = root / "keep.txt";
+        write_file(stale);
+        write_file(live);
+        write_file(current);
+        write_file(malformed);
+        write_file(unrelated);
+
+        remove_stale_endpoints(root, 303, fake_process_is_running);
+        check(!std::filesystem::exists(stale),
+              "Cleanup did not remove an endpoint owned by a dead process");
+        check(std::filesystem::exists(live),
+              "Cleanup removed an endpoint owned by a live process");
+        check(std::filesystem::exists(current),
+              "Cleanup removed the current process endpoint");
+        check(std::filesystem::exists(malformed),
+              "Cleanup removed a file that is not a valid PID endpoint");
+        check(std::filesystem::exists(unrelated),
+              "Cleanup removed an unrelated file in the metrics directory");
+
+        remove_stale_endpoints(root / "missing", 303, fake_process_is_running);
+    } catch (...) {
+        std::error_code ignored;
+        std::filesystem::remove_all(root, ignored);
+        throw;
+    }
+    std::error_code ignored;
+    std::filesystem::remove_all(root, ignored);
+}
 }
 
 int main() {
@@ -189,6 +257,7 @@ int main() {
         check_monitor_validation();
         check_monitor_callback_and_shutdown();
         check_stop_from_callback();
+        check_metrics_endpoint_cleanup();
         std::cout << "Metrics tests passed\n";
         return 0;
     } catch (const std::exception& error) {

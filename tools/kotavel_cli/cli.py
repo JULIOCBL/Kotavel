@@ -27,6 +27,7 @@ class CommandHelpParser(argparse.ArgumentParser):
             ('build', 'Instala dependencias, compila y prueba.'),
             ('test', 'Ejecuta las pruebas sin recompilar.'),
             ('run', 'Compila, prueba y ejecuta la aplicación.'),
+            ('stop', 'Detiene las aplicaciones Kotavel activas del proyecto.'),
             ('package', 'Compila y genera .app, .dmg o .pkg en macOS.'),
             ('monitor', 'Muestra métricas de una aplicación en ejecución.'),
             ('shell', 'Abre la terminal con las herramientas activas.'),
@@ -45,6 +46,7 @@ class CommandHelpParser(argparse.ArgumentParser):
             ('install --offline', 'Usa solo la caché local.'),
             ('test --framework', 'Comprueba Python, núcleo e integración local.'),
             ('monitor --pid PID', 'Selecciona una instancia concreta.'),
+            ('stop --pid PID', 'Detiene una instancia concreta.'),
         ]:
             lines.append(row(command, description))
         lines.extend(['', paint('Opciones:', '1;36')])
@@ -57,6 +59,7 @@ class CommandHelpParser(argparse.ArgumentParser):
             lines.append(row(option, description))
         lines.extend(['', paint('Ejemplos:', '1;36'),
                       '  ' + paint('python3 kotavel.py test --framework', '33'),
+                      '  ' + paint('python3 kotavel.py stop', '33'),
                       '  ' + paint('python3 kotavel.py install add nombre/version', '33'),
                       '  ' + paint('python3 kotavel.py install --reset', '33'),
                       '  ' + paint('python3 kotavel.py <comando> --help', '33'), ''])
@@ -74,6 +77,7 @@ def main(argv=None):
         'build': 'Instala dependencias, compila el proyecto y ejecuta sus pruebas.',
         'test': 'Ejecuta las pruebas del proyecto; --framework comprueba Python, núcleo e integración local.',
         'run': 'Compila, prueba y ejecuta la aplicación.',
+        'stop': 'Detiene las aplicaciones Kotavel activas del proyecto.',
         'package': 'Compila la aplicación y genera sus entregables macOS (.app, .dmg y .pkg).',
         'monitor': 'Muestra CPU y RAM de una aplicación Kotavel activa.',
         'shell': 'Abre una terminal con las herramientas del proyecto activas.',
@@ -87,6 +91,9 @@ def main(argv=None):
         if args.command == 'monitor':
             from . import monitor
             return monitor.main([*remaining, '--project', str(root)])
+        if args.command == 'stop':
+            from . import stop
+            return stop.main([*remaining, '--project', str(root)])
         if args.command == 'package':
             from . import package
             return package.main([*remaining, '--project', str(root)])

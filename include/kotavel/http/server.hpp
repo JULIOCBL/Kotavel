@@ -83,6 +83,10 @@ public:
     void log_access(const Request& request, int status,
                     std::chrono::system_clock::time_point received_at,
                     std::chrono::steady_clock::duration elapsed) const noexcept;
+    // Transport metadata is enough for logging; avoid parsing a second Request.
+    void log_access(std::string_view method, std::string_view path, int status,
+                    std::chrono::system_clock::time_point received_at,
+                    std::chrono::steady_clock::duration elapsed) const noexcept;
     void run(const ServerSettings& settings = {},
              const ServerStartedCallback& started = {});
     void stop() noexcept;

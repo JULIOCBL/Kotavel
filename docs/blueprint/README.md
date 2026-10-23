@@ -97,6 +97,8 @@ forzando interfaces de plataforma en cada módulo:
 | `console` | Arranque, ejecución y mensajes | Compone los providers y consulta `OS::key()` como dato; no selecciona código con ramas. |
 | `metrics` | Cálculo y publicación de métricas | `ProcessMetricsProvider`, transporte local y PID tienen implementaciones nativas. |
 | `http` | Rutas, requests, validación y respuestas | La resolución de host y el transporte nativo se delegan; la integración Drogon es un target opcional. |
+| `filesystem` | Operaciones locales de archivos | `Kotavel::Filesystem` ofrece una API común y delega bloqueo, permisos y escritura atómica al adaptador nativo. |
+| `session` | Estado persistente por cliente y ciclo de vida de sesión | Consume el contrato `Filesystem`: rutas por prefijo del ID, migración del formato plano y limpieza incremental con cursor. La API HTTP permanece compatible; véase [sesiones](../sessions.md). |
 | `desktop` | Ciclo de vida y contratos desktop | Qt está tras `Kotavel::DesktopQt`; su implementación es opcional y se enlaza aparte. |
 
 Los contratos agrupan capacidades estables; no deben crecer como una interfaz
@@ -122,7 +124,7 @@ Python mediante `python3 kotavel.py test --framework` desde el laboratorio.
 Esta validación nativa prueba macOS arm64; no sustituye las ejecuciones en
 Windows y Linux.
 
-Los futuros targets podrían ser `Kotavel::Console`, `Kotavel::Events`, `Kotavel::Http`, `Kotavel::Database`, `Kotavel::Cache` y `Kotavel::Queue`. Solo `Kotavel::Core` existe hoy. Al implementarlos, sus opciones CMake y Conan deberán coincidir para que una dependencia opcional no se convierta en requisito obligatorio del núcleo.
+Los targets existentes incluyen `Kotavel::Core`, `Kotavel::Filesystem`, `Kotavel::HttpContract` y `Kotavel::Desktop`; `Kotavel::Http` y `Kotavel::DesktopQt` se agregan cuando se activan sus adaptadores. Session tiene carpetas de módulo propias y sigue enlazada dentro de `Kotavel::HttpContract` mientras comparte tipos HTTP. Los futuros targets podrían incluir Console, Events, Database, Cache y Queue. Al independizar targets, sus opciones CMake y Conan deberán coincidir para que una dependencia opcional no se convierta en requisito obligatorio del núcleo.
 
 ## Estructura del repositorio
 
@@ -133,13 +135,18 @@ Kotavel/
 │   ├── diagnostics/      Reporte de errores, contexto y depuración
 │   ├── container/        Registro y construcción de servicios
 │   ├── contracts/        Interfaces públicas pequeñas
+│   ├── filesystem/       Operaciones de archivos reutilizables
+│   ├── session/          API pública de sesiones
 │   ├── console/          Comandos del runtime consumidor
 │   ├── events/           Eventos internos y suscripciones
 │   ├── http/             Contratos HTTP futuros
 │   ├── database/         Persistencia opcional
 │   ├── cache/            Caché opcional
 │   └── queue/            Trabajos y colas opcionales
-├── src/                  Implementaciones de los módulos anteriores
+├── src/                  Implementaciones organizadas por área
+│   ├── filesystem/       Implementación local común
+│   ├── session/          Sesiones y almacén de archivos
+│   └── platform/         Adaptadores nativos por capacidad y sistema
 ├── adapters/             Integraciones concretas con proveedores externos
 ├── tools/kotavel_cli/    Herramientas Python de desarrollo existentes
 ├── templates/application/ Plantilla futura del proyecto consumidor

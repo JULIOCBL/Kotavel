@@ -170,7 +170,8 @@ def run_application(executable, environment, deep_link, env, build_type='Debug')
     if deep_link:
         # DesktopKernel valida el esquema configurado y resuelve la ruta registrada.
         command.append(deep_link)
-    run(command, runtime_environment(env, build_type))
+    get_platform().run_application(command, cwd=ROOT,
+                                   env=runtime_environment(env, build_type))
 
 
 def profile_label(path):

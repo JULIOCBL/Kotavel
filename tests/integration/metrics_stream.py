@@ -26,6 +26,10 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix='kotavel-metrics-stream-') as temporary:
         root = Path(temporary)
+        metrics_directory = root / 'storage/framework/metrics'
+        metrics_directory.mkdir(parents=True)
+        stale_endpoint = metrics_directory / 'kotavel-18446744073709551615.endpoint'
+        stale_endpoint.write_text('1\n', encoding='ascii')
         process = subprocess.Popen(
             [executable, str(root)], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True
         )
@@ -48,6 +52,8 @@ def main() -> int:
                     time.sleep(0.02)
             if connection is None or endpoint is None:
                 raise AssertionError('Metrics stream did not publish a connectable endpoint.')
+            if stale_endpoint.exists():
+                raise AssertionError('Startup did not remove an endpoint for an exited process.')
 
             connection.settimeout(3)
             with connection, connection.makefile('r', encoding='utf-8') as stream:

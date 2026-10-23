@@ -1,5 +1,9 @@
 # Medición exploratoria del núcleo
 
+La revisión y las mediciones del recorrido HTTP están documentadas en
+[Flujo HTTP y rendimiento](../docs/http/performance.md). El target
+`kotavel_http_benchmark` utiliza el mismo ejecutor `benchmarks/run.py`.
+
 Desde Kotavel, compila sin sanitizers y ejecuta tres repeticiones:
 
 ```sh

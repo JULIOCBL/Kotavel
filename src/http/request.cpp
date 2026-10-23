@@ -1,4 +1,5 @@
 #include <kotavel/http/request.hpp>
+#include <kotavel/http/session.hpp>
 
 #include <rapidjson/document.h>
 
@@ -59,7 +60,7 @@ std::string decode_component(std::string_view value) {
     return decoded;
 }
 
-using Values = std::map<std::string, std::optional<std::string>>;
+using Values = std::map<std::string, std::optional<std::string>, std::less<>>;
 void store_value(Values& values, std::string key, std::optional<std::string> value);
 
 std::string quoted_parameter(std::string_view text, std::string_view key) {
@@ -73,7 +74,7 @@ std::string quoted_parameter(std::string_view text, std::string_view key) {
 }
 
 void parse_multipart(std::string_view body, std::string_view boundary, Values& fields,
-                     std::map<std::string, UploadedFile>& files) {
+                     std::map<std::string, UploadedFile, std::less<>>& files) {
     const std::string delimiter = "--" + std::string(boundary);
     std::size_t cursor = 0;
     while (true) {
@@ -154,9 +155,9 @@ std::string scalar_value(const rapidjson::Value& value) {
 }
 
 void flatten_json(const rapidjson::Value& value, const std::string& key, Values& values,
-                 std::set<std::string>& arrays, std::set<std::string>& objects,
-                 std::map<std::string, std::vector<std::string>>& array_values,
-                 std::map<std::string, std::vector<std::string>>& object_keys) {
+                 std::set<std::string, std::less<>>& arrays, std::set<std::string, std::less<>>& objects,
+                 std::map<std::string, std::vector<std::string>, std::less<>>& array_values,
+                 std::map<std::string, std::vector<std::string>, std::less<>>& object_keys) {
     if (value.IsObject()) {
         objects.insert(key);
         for (auto member = value.MemberBegin(); member != value.MemberEnd(); ++member) {
@@ -237,7 +238,7 @@ Request::Request(Method method, std::string_view path, std::string_view body,
                           std::string(raw_method), {}, {}, {}}) {}
 
 std::optional<std::string_view> Request::input(std::string_view key) const {
-    const auto body_value = body_values_.find(std::string(key));
+    const auto body_value = body_values_.find(key);
     if (body_value != body_values_.end()) {
         if (!body_value->second) return std::nullopt;
         return *body_value->second;
@@ -247,7 +248,7 @@ std::optional<std::string_view> Request::input(std::string_view key) const {
 }
 
 std::optional<std::string_view> Request::query(std::string_view key) const {
-    const auto value = query_values_.find(std::string(key));
+    const auto value = query_values_.find(key);
     if (value == query_values_.end() || !value->second) return std::nullopt;
     return *value->second;
 }
@@ -259,13 +260,17 @@ std::optional<std::string_view> Request::route(std::string_view key) const {
 }
 
 std::optional<std::string_view> Request::header(std::string_view key) const {
-    const auto value = headers_.find(lower(std::string(key)));
+    // Most adapter/internal lookups are already lowercase. Only normalize when needed.
+    const bool uppercase = std::any_of(key.begin(), key.end(), [](unsigned char ch) {
+        return ch >= 'A' && ch <= 'Z';
+    });
+    const auto value = uppercase ? headers_.find(lower(std::string(key))) : headers_.find(key);
     if (value == headers_.end()) return std::nullopt;
     return value->second;
 }
 
 const UploadedFile* Request::file(std::string_view key) const {
-    const auto value = files_.find(std::string(key));
+    const auto value = files_.find(key);
     return value == files_.end() ? nullptr : &value->second;
 }
 
@@ -274,42 +279,46 @@ bool Request::has(std::string_view key) const {
 }
 
 bool Request::exists(std::string_view key) const {
-    const std::string owned(key);
-    return body_values_.contains(owned) || query_values_.contains(owned) || files_.contains(owned) ||
-           body_arrays_.contains(owned) || body_objects_.contains(owned);
+    return body_values_.contains(key) || query_values_.contains(key) || files_.contains(key) ||
+           body_arrays_.contains(key) || body_objects_.contains(key);
 }
 
 bool Request::is_null(std::string_view key) const {
-    const std::string owned(key);
-    const auto body = body_values_.find(owned);
+    const auto body = body_values_.find(key);
     if (body != body_values_.end()) return !body->second.has_value();
-    const auto query = query_values_.find(owned);
+    const auto query = query_values_.find(key);
     return query != query_values_.end() && !query->second.has_value();
 }
 
 bool Request::filled(std::string_view key) const {
-    if (is_array(key)) return !array_values(key).empty();
-    if (is_object(key)) return !array_keys(key).empty();
+    if (is_array(key)) {
+        const auto found = body_array_values_.find(key);
+        return found != body_array_values_.end() && !found->second.empty();
+    }
+    if (is_object(key)) {
+        const auto found = body_object_keys_.find(key);
+        return found != body_object_keys_.end() && !found->second.empty();
+    }
     if (const auto* uploaded = file(key)) return !uploaded->contents.empty();
     const auto value = input(key);
     return value && !value->empty();
 }
 
 bool Request::is_array(std::string_view key) const {
-    return body_arrays_.contains(std::string(key));
+    return body_arrays_.contains(key);
 }
 
 bool Request::is_object(std::string_view key) const {
-    return body_objects_.contains(std::string(key));
+    return body_objects_.contains(key);
 }
 
 std::vector<std::string> Request::array_values(std::string_view key) const {
-    const auto found = body_array_values_.find(std::string(key));
+    const auto found = body_array_values_.find(key);
     return found == body_array_values_.end() ? std::vector<std::string>{} : found->second;
 }
 
 std::vector<std::string> Request::array_keys(std::string_view key) const {
-    const auto found = body_object_keys_.find(std::string(key));
+    const auto found = body_object_keys_.find(key);
     return found == body_object_keys_.end() ? std::vector<std::string>{} : found->second;
 }
 
@@ -329,6 +338,8 @@ const Request& request() {
         throw std::logic_error("request() is only available while handling an HTTP request");
     return *active_request;
 }
+
+Session& Request::session() const { return http::session(); }
 
 detail::RequestScope::RequestScope(const Request& current) noexcept
     : previous_(active_request) {

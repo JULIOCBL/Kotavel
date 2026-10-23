@@ -42,11 +42,8 @@ bool write_json(Writer& writer, const JsonValue& value) {
     }, value.value());
 }
 
-std::string stringify(const JsonValue& value) {
-    rapidjson::StringBuffer buffer;
-    Writer writer(buffer);
-    if (!write_json(writer, value)) throw std::runtime_error("Could not serialize JSON response");
-    return {buffer.GetString(), buffer.GetSize()};
+bool write_string(Writer& writer, std::string_view value) {
+    return writer.String(value.data(), static_cast<rapidjson::SizeType>(value.size()));
 }
 
 } // namespace
@@ -57,15 +54,20 @@ Response ApiResponse::success_json(JsonValue data, int status,
         throw std::invalid_argument("API success status must be between 200 and 299");
     if (status == 204) return Response{204, "application/json; charset=utf-8", {}};
 
-    JsonValue::Object body;
-    body.emplace("data", std::move(data));
+    rapidjson::StringBuffer buffer;
+    Writer writer(buffer);
+    writer.StartObject();
+    writer.Key("data");
+    if (!write_json(writer, data)) throw std::runtime_error("Could not serialize JSON response");
     if (!title.empty() || !message.empty()) {
-        JsonValue::Object meta;
-        if (!title.empty()) meta.emplace("title", std::string(title));
-        if (!message.empty()) meta.emplace("message", std::string(message));
-        body.emplace("meta", std::move(meta));
+        writer.Key("meta");
+        writer.StartObject();
+        if (!message.empty()) { writer.Key("message"); write_string(writer, message); }
+        if (!title.empty()) { writer.Key("title"); write_string(writer, title); }
+        writer.EndObject();
     }
-    return Response{status, "application/json; charset=utf-8", stringify(JsonValue(std::move(body)))};
+    writer.EndObject();
+    return Response{status, "application/json; charset=utf-8", {buffer.GetString(), buffer.GetSize()}};
 }
 
 Response ApiResponse::error(int status, const std::vector<ApiError>& errors) {
@@ -73,21 +75,27 @@ Response ApiResponse::error(int status, const std::vector<ApiError>& errors) {
         throw std::invalid_argument("API error status must be between 400 and 599");
     if (errors.empty()) throw std::invalid_argument("API error response requires at least one error");
 
-    JsonValue::Array encoded_errors;
-    encoded_errors.reserve(errors.size());
+    rapidjson::StringBuffer buffer;
+    Writer writer(buffer);
+    writer.StartObject();
+    writer.Key("errors");
+    writer.StartArray();
     const auto status_text = std::to_string(status);
     for (const auto& error : errors) {
-        JsonValue::Object item;
-        item.emplace("status", status_text);
-        item.emplace("title", error.title);
-        item.emplace("detail", error.detail);
-        if (error.field) item.emplace("source", JsonValue::Object{{"field", *error.field}});
-        encoded_errors.emplace_back(std::move(item));
+        writer.StartObject();
+        writer.Key("detail"); write_string(writer, error.detail);
+        if (error.field) {
+            writer.Key("source"); writer.StartObject();
+            writer.Key("field"); write_string(writer, *error.field);
+            writer.EndObject();
+        }
+        writer.Key("status"); write_string(writer, status_text);
+        writer.Key("title"); write_string(writer, error.title);
+        writer.EndObject();
     }
-
-    JsonValue::Object body;
-    body.emplace("errors", std::move(encoded_errors));
-    return Response{status, "application/json; charset=utf-8", stringify(JsonValue(std::move(body)))};
+    writer.EndArray();
+    writer.EndObject();
+    return Response{status, "application/json; charset=utf-8", {buffer.GetString(), buffer.GetSize()}};
 }
 
 Response ApiResponse::error(int status, std::string_view title, std::string_view message) {

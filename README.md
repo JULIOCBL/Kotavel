@@ -15,7 +15,9 @@ opcional `Kotavel::Http` incorpora un adaptador Drogon; el núcleo no depende de
 Consulta [Configuración](docs/configuration.md) para el entorno y `Config`,
 [el uso del núcleo](docs/core.md) para registros y errores,
 [el contenedor de servicios](docs/container.md) para registrar dependencias,
-[rutas HTTP y deep links](docs/http.md) y su [referencia de middleware](docs/http/middleware.md).
+[rutas HTTP y deep links](docs/http.md) y su [referencia de middleware](docs/http/middleware.md),
+[Filesystem](docs/filesystem.md) para operaciones de almacenamiento reutilizables y
+[Sesiones](docs/sessions.md) para identificar clientes y persistir sus datos.
 El [módulo desktop](docs/desktop.md) documenta rutas, ventanas y vistas QML.
 La [referencia interna de Config](docs/internals/config.md) explica su
 almacenamiento, carga, coste de operaciones y reglas de concurrencia.
@@ -27,8 +29,9 @@ El análisis de las cachés compartidas, herramientas de desarrollo y paquetes
 binarios está en [Distribución y dependencias](docs/blueprint/distribution.md).
 
 ```text
-include/kotavel/   Interfaces públicas del núcleo, HTTP opcional y deep links
-src/              Implementación del núcleo y módulos
+include/kotavel/   Interfaces públicas del núcleo y sus módulos
+src/              Implementación común organizada por módulo
+src/platform/<módulo>/<plataforma>/ Adaptadores nativos organizados por capacidad
 src/platform/<módulo>/<plataforma>/ Adaptadores nativos organizados por capacidad
 resources/messages/ Catálogos JSON de mensajes internos por módulo
 assets/branding/  Logotipo, símbolo e icono predeterminados de Kotavel

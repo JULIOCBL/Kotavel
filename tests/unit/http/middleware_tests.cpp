@@ -1,4 +1,5 @@
 #include <kotavel/http/server.hpp>
+#include "http/route_method_index.hpp"
 
 #include <iostream>
 #include <memory>
@@ -306,10 +307,33 @@ void test_configuration_is_sealed_after_start() {
     kernel.stop();
     check(state->stopped, "Kernel shutdown should reach the server adapter");
 }
+void test_route_method_index_preserves_matching() {
+    using namespace kotavel::http;
+    Router routes;
+    const auto handler = [](const Request&) { return Response{}; };
+    routes.api_get("/items/{id}", handler);
+    routes.api_post("/items/special", handler);
+    routes.api_post("/items/{id}", handler);
+    routes.api_get("/health", handler);
+    routes.api_get("/health/", handler);
+    detail::RouteMethodIndex index(routes.routes());
+    check(!index.rejects("/api/items/42", Method::get), "dynamic GET should be allowed");
+    check(!index.rejects("/api/items/special", Method::post), "static POST should be allowed");
+    check(!index.rejects("/api/items/special", Method::get), "overlapping dynamic method must reach transport routing");
+    check(index.rejects("/api/items/42", Method::patch), "unregistered dynamic method should be rejected");
+    check(index.rejects("/api/items/42", std::nullopt), "unsupported method on a dynamic route should be rejected");
+    check(index.rejects("/api/health", Method::post), "unregistered literal method should be rejected");
+    check(index.rejects("/api/health/", Method::post), "literal trailing slash should be retained");
+    check(!index.rejects("/api/items/", Method::post), "empty parameter must remain a missing route");
+    check(!index.rejects("/api/items/42/extra", Method::get), "extra segments must remain a missing route");
+    check(!index.rejects("/api/unknown", std::nullopt), "unknown paths must reach the 404 handler");
+}
+
 }
 
 int main() {
     try {
+        test_route_method_index_preserves_matching();
         test_declarative_configuration_and_group_scopes();
         test_invalid_configuration_and_aliases();
         test_short_circuit_and_exception_boundary();

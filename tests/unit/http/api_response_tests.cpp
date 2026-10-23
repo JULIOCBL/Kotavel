@@ -62,6 +62,12 @@ int main() {
     check(no_content.status == 204 && no_content.body.empty(),
           "204 success responses should not contain a body");
 
+    const auto escaped = ApiResponse::error(400, std::vector<ApiError>{
+        {"Bad \"input\"", std::string("a\0b\n", 4), std::string{}}});
+    check(escaped.body ==
+          R"({"errors":[{"detail":"a\u0000b\n","source":{"field":""},"status":"400","title":"Bad \"input\""}]})",
+          "direct error serialization must preserve escaping, embedded nulls and an empty field source");
+
     bool rejected_status = false;
     try { (void)ApiResponse::error(200, "Bad", "Invalid error status"); }
     catch (const std::invalid_argument&) { rejected_status = true; }

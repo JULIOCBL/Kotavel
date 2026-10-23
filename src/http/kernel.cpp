@@ -1,4 +1,5 @@
 #include <kotavel/http/server.hpp>
+#include <kotavel/foundation/app.hpp>
 #include <kotavel/http/api_response.hpp>
 #include "../platform/utc_time.hpp"
 
@@ -119,7 +120,7 @@ std::string_view method_name(Method method) noexcept {
     return "UNKNOWN";
 }
 
-void print_access_log(const Request& request, int status,
+void print_access_log(std::string_view method, std::string_view path, int status,
                       std::chrono::system_clock::time_point received_at,
                       std::chrono::steady_clock::duration elapsed) noexcept {
     try {
@@ -132,7 +133,7 @@ void print_access_log(const Request& request, int status,
         const bool has_utc_time = platform::detail::to_utc_time(time_value, utc_time);
 
         // Sanitizar controles evita que una ruta pueda falsificar líneas en la terminal.
-        std::string printable_path(request.path());
+        std::string printable_path(path);
         for (char& character : printable_path) {
             if (character == '\r' || character == '\n' || character == '\t') character = ' ';
         }
@@ -146,8 +147,6 @@ void print_access_log(const Request& request, int status,
         } else {
             line << "unknown-time";
         }
-        const auto method = request.raw_method().empty()
-            ? method_name(request.method()) : request.raw_method();
         line << ' ' << method << ' ' << printable_path << ' '
              << normalized_status(status) << ' ' << std::fixed << std::setprecision(3)
              << elapsed_ms << " ms\n";
@@ -254,6 +253,7 @@ void HttpKernel::set_exception_reporter(ExceptionReporter reporter) {
 
 Response HttpKernel::handle(const RouteDefinition& route, const Request& request) const {
     const detail::RequestScope request_scope(request);
+    const kotavel::detail::LocaleScope locale_scope;
     // Negotiate before middleware so an unsupported representation cannot trigger
     // side effects such as writes, authentication challenges, or controller work.
     if (!request_accepts_route(request, route.kind)) return not_acceptable(route.kind);
@@ -269,25 +269,29 @@ Response HttpKernel::handle(const RouteDefinition& route, const Request& request
             response.status = normalized_status(response.status);
         } else {
 
-            // Ejecutar las pilas sin copiar sus funciones por cada petición.
-            const auto invoke_stack = [&](const auto& self, const std::vector<Middleware>& stack,
-                                          std::size_t index, const Next& next) -> Response {
-                if (index == stack.size()) return next();
-                const Next continuation = [&self, &stack, index, &next] {
-                    return self(self, stack, index + 1, next);
-                };
-                return stack[index](request, continuation);
-            };
+            // The continuation captures two words, fitting std::function's small
+            // buffer on common standard libraries. No middleware callbacks are copied.
+            struct Chain {
+                const Request& request;
+                const RouteDefinition& route;
+                const std::vector<Middleware>& global;
+                const std::vector<Middleware>& group;
 
-            const Next invoke_route_middleware = [&]() -> Response {
-                const Next invoke_handler = [&]() { return route.handler(request); };
-                return invoke_stack(invoke_stack, route.middleware, 0, invoke_handler);
+                Response invoke(std::size_t position) const {
+                    const Middleware* middleware = nullptr;
+                    if (position < global.size()) middleware = &global[position];
+                    else if (position - global.size() < group.size())
+                        middleware = &group[position - global.size()];
+                    else {
+                        const auto index = position - global.size() - group.size();
+                        if (index == route.middleware.size()) return route.handler(request);
+                        middleware = &route.middleware[index];
+                    }
+                    const Next next = [this, position] { return invoke(position + 1); };
+                    return (*middleware)(request, next);
+                }
             };
-            const Next invoke_group_middleware = [&]() -> Response {
-                return invoke_stack(invoke_stack, group, 0, invoke_route_middleware);
-            };
-            const Next next = invoke_group_middleware;
-            response = invoke_stack(invoke_stack, global_middleware_, 0, next);
+            response = Chain{request, route, global_middleware_, group}.invoke(0);
             response.status = normalized_status(response.status);
         }
     } catch (...) {
@@ -335,7 +339,14 @@ Response HttpKernel::method_not_allowed(const Request& request) const {
 void HttpKernel::log_access(const Request& request, int status,
                             std::chrono::system_clock::time_point received_at,
                             std::chrono::steady_clock::duration elapsed) const noexcept {
-    print_access_log(request, status, received_at, elapsed);
+    log_access(request.raw_method().empty() ? method_name(request.method()) : request.raw_method(),
+               request.path(), status, received_at, elapsed);
+}
+
+void HttpKernel::log_access(std::string_view method, std::string_view path, int status,
+                            std::chrono::system_clock::time_point received_at,
+                            std::chrono::steady_clock::duration elapsed) const noexcept {
+    print_access_log(method, path, status, received_at, elapsed);
 }
 
 void HttpKernel::run(const ServerSettings& settings, const ServerStartedCallback& started) {

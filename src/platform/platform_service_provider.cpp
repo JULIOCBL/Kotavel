@@ -21,6 +21,11 @@ public:
                 return make_runtime_path_resolver();
             });
         }
+        if (!services.contains<contracts::NetworkAddressesProvider>()) {
+            services.singleton<contracts::NetworkAddressesProvider>([](Container&) {
+                return make_network_addresses_provider();
+            });
+        }
         if (!services.contains<contracts::PlatformServices>()) {
             services.singleton<contracts::PlatformServices>([](Container& container) {
                 return std::make_unique<contracts::PlatformServices>(contracts::PlatformServices{

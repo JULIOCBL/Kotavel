@@ -87,6 +87,22 @@ class PlatformAdapter:
     def executable_for_run(self, executable):
         return Path(executable)
 
+    def process_command_line(self, process_id):
+        raise NotImplementedError
+
+    def request_process_stop(self, process_id):
+        raise NotImplementedError
+
+    def force_process_stop(self, process_id):
+        raise NotImplementedError
+
+    def process_is_running(self, process_id):
+        raise NotImplementedError
+
+    def run_application(self, command, *, cwd, env):
+        import subprocess
+        subprocess.run(command, cwd=cwd, env=env, check=True)
+
     def lock_project(self, stream):
         raise NotImplementedError
 

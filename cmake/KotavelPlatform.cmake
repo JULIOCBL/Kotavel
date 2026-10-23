@@ -2,6 +2,7 @@
 include(CheckCXXSymbolExists)
 set(KOTAVEL_PLATFORM_LIBRARIES)
 set(KOTAVEL_HTTP_PLATFORM_LIBRARIES)
+set(KOTAVEL_FILESYSTEM_PLATFORM_LIBRARIES)
 
 if(WIN32)
     set(KOTAVEL_PLATFORM_NAME "windows")
@@ -16,9 +17,13 @@ if(WIN32)
         src/platform/diagnostics/windows/stack_trace.cpp
         src/platform/time/windows/utc_time.cpp
         src/platform/networking/windows/host_resolver.cpp
+        src/platform/networking/windows/network_addresses.cpp
         src/platform/metrics/windows/metrics_stream_transport.cpp)
-    set(KOTAVEL_PLATFORM_LIBRARIES Psapi Ws2_32)
-    set(KOTAVEL_HTTP_PLATFORM_LIBRARIES Ws2_32)
+    set(KOTAVEL_PLATFORM_LIBRARIES Psapi Ws2_32 Iphlpapi)
+    set(KOTAVEL_HTTP_PLATFORM_SOURCES src/platform/security/windows/session_files.cpp)
+    set(KOTAVEL_HTTP_PLATFORM_LIBRARIES Bcrypt)
+    set(KOTAVEL_FILESYSTEM_PLATFORM_SOURCES src/platform/filesystem/windows/filesystem.cpp)
+    set(KOTAVEL_FILESYSTEM_PLATFORM_LIBRARIES Advapi32)
 elseif(APPLE)
     set(KOTAVEL_PLATFORM_NAME "macos")
     set(KOTAVEL_PLATFORM_SOURCES
@@ -32,9 +37,11 @@ elseif(APPLE)
         src/platform/diagnostics/posix/stack_trace.cpp
         src/platform/time/posix/utc_time.cpp
         src/platform/networking/posix/host_resolver.cpp
+        src/platform/networking/posix/network_addresses.cpp
         src/platform/networking/macos/socket_signal.cpp
         src/platform/metrics/posix/metrics_stream_transport.cpp)
-    set(KOTAVEL_HTTP_PLATFORM_LIBRARIES)
+    set(KOTAVEL_HTTP_PLATFORM_SOURCES src/platform/security/posix/session_files.cpp)
+    set(KOTAVEL_FILESYSTEM_PLATFORM_SOURCES src/platform/filesystem/posix/filesystem.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(KOTAVEL_PLATFORM_NAME "linux")
     set(KOTAVEL_PLATFORM_SOURCES
@@ -48,9 +55,11 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         src/platform/diagnostics/posix/stack_trace.cpp
         src/platform/time/posix/utc_time.cpp
         src/platform/networking/posix/host_resolver.cpp
+        src/platform/networking/posix/network_addresses.cpp
         src/platform/networking/linux/socket_signal.cpp
         src/platform/metrics/posix/metrics_stream_transport.cpp)
-    set(KOTAVEL_HTTP_PLATFORM_LIBRARIES)
+    set(KOTAVEL_HTTP_PLATFORM_SOURCES src/platform/security/posix/session_files.cpp)
+    set(KOTAVEL_FILESYSTEM_PLATFORM_SOURCES src/platform/filesystem/posix/filesystem.cpp)
 else()
     message(FATAL_ERROR "Unsupported Kotavel platform: ${CMAKE_SYSTEM_NAME}")
 endif()

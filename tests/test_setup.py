@@ -13,6 +13,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools.kotavel_cli import install as setup
 
 
+def record_application_run(commands):
+    def execute(executable, environment, deep_link, env, build_type):
+        command = [str(executable), '--env=' + environment,
+                   '--project-root=' + str(setup.ROOT)]
+        if deep_link:
+            command.append(deep_link)
+        commands.append(command)
+    return execute
+
+
 class ProfileTests(unittest.TestCase):
     def test_selects_each_system_profile(self):
         for system, (name, expected_os) in setup.SYSTEMS.items():
@@ -219,7 +229,7 @@ class WindowsOptimizationTests(unittest.TestCase):
                 commands.append([str(arg) for arg in args])
                 if fail_tests and args[0] == 'ctest':
                     raise subprocess.CalledProcessError(1, args)
-            with self.subTest(fail_tests=fail_tests), patch.object(setup, 'ROOT', self.root), patch.object(setup, 'CONAN_HOME', self.root / 'conan'), patch.object(setup, 'read_profile', return_value=(self.root / 'profiles' / 'windows', config)), patch.object(setup.platform, 'system', return_value='Windows'), patch.object(setup.sysconfig, 'get_platform', return_value='win-amd64'), patch.object(setup, 'prepare_platform', return_value=prepared), patch.object(setup, 'compiler_environment'), patch.object(setup.shutil, 'which', return_value='tool'), patch.object(setup, 'run', side_effect=execute), patch.object(setup, 'project_executable', return_value='kotavel-lab'), patch.object(setup.sys, 'argv', ['install.py', '--configure-only', '--run']), patch.object(setup, 'success_banner') as banner:
+            with self.subTest(fail_tests=fail_tests), patch.object(setup, 'ROOT', self.root), patch.object(setup, 'CONAN_HOME', self.root / 'conan'), patch.object(setup, 'read_profile', return_value=(self.root / 'profiles' / 'windows', config)), patch.object(setup.platform, 'system', return_value='Windows'), patch.object(setup.sysconfig, 'get_platform', return_value='win-amd64'), patch.object(setup, 'prepare_platform', return_value=prepared), patch.object(setup, 'compiler_environment'), patch.object(setup.shutil, 'which', return_value='tool'), patch.object(setup, 'run', side_effect=execute), patch.object(setup, 'run_application', side_effect=record_application_run(commands)), patch.object(setup, 'project_executable', return_value='kotavel-lab'), patch.object(setup.sys, 'argv', ['install.py', '--configure-only', '--run']), patch.object(setup, 'success_banner') as banner:
                 if fail_tests:
                     with self.assertRaises(subprocess.CalledProcessError):
                         setup.main()
@@ -353,7 +363,7 @@ class LinuxOptimizationTests(unittest.TestCase):
                 commands.append([str(arg) for arg in args])
                 if fail_tests and args[0] == 'ctest':
                     raise subprocess.CalledProcessError(1, args)
-            with patch.object(setup, 'ROOT', self.root), patch.object(setup, 'CONAN_HOME', self.root / 'conan'), patch.object(setup, 'read_profile', return_value=(self.root / 'profiles/linux', config)), patch.object(setup.platform, 'system', return_value='Linux'), patch.object(setup.platform, 'machine', return_value='aarch64'), patch.object(setup, 'prepare_platform', return_value=prepared), patch.object(setup, 'compiler_environment'), patch.object(setup.shutil, 'which', return_value='tool'), patch.object(setup, 'run', side_effect=execute), patch.object(setup, 'project_executable', return_value='kotavel-lab'), patch.object(setup.sys, 'argv', ['install.py', '--configure-only', '--run']), patch.object(setup, 'success_banner') as banner:
+            with patch.object(setup, 'ROOT', self.root), patch.object(setup, 'CONAN_HOME', self.root / 'conan'), patch.object(setup, 'read_profile', return_value=(self.root / 'profiles/linux', config)), patch.object(setup.platform, 'system', return_value='Linux'), patch.object(setup.platform, 'machine', return_value='aarch64'), patch.object(setup, 'prepare_platform', return_value=prepared), patch.object(setup, 'compiler_environment'), patch.object(setup.shutil, 'which', return_value='tool'), patch.object(setup, 'run', side_effect=execute), patch.object(setup, 'run_application', side_effect=record_application_run(commands)), patch.object(setup, 'project_executable', return_value='kotavel-lab'), patch.object(setup.sys, 'argv', ['install.py', '--configure-only', '--run']), patch.object(setup, 'success_banner') as banner:
                 if fail_tests:
                     with self.assertRaises(subprocess.CalledProcessError):
                         setup.main()
@@ -450,7 +460,7 @@ class MacOptimizationTests(unittest.TestCase):
                     commands.append([str(arg) for arg in args])
                     if fail_tests and args[0] == 'ctest':
                         raise subprocess.CalledProcessError(1, args)
-                with self.subTest(fail_tests=fail_tests), patch.object(setup, 'ROOT', root), patch.object(setup, 'TOOLS', tools), patch.object(setup, 'CONAN_HOME', root / 'conan'), patch.object(setup, 'read_profile', return_value=(root / 'profiles/macos', config)), patch.object(setup.platform, 'system', return_value='Darwin'), patch.object(setup.platform, 'machine', return_value='arm64'), patch.object(setup, 'prepare_platform', return_value=prepared), patch.object(setup, 'compiler_environment'), patch.object(setup.shutil, 'which', return_value='tool'), patch.object(setup, 'run', side_effect=execute), patch.object(setup, 'project_executable', return_value='kotavel-lab'), patch.object(setup.sys, 'argv', ['install.py', '--configure-only', '--run', '--build-type', 'Release']), patch.object(setup, 'success_banner') as banner:
+                with self.subTest(fail_tests=fail_tests), patch.object(setup, 'ROOT', root), patch.object(setup, 'TOOLS', tools), patch.object(setup, 'CONAN_HOME', root / 'conan'), patch.object(setup, 'read_profile', return_value=(root / 'profiles/macos', config)), patch.object(setup.platform, 'system', return_value='Darwin'), patch.object(setup.platform, 'machine', return_value='arm64'), patch.object(setup, 'prepare_platform', return_value=prepared), patch.object(setup, 'compiler_environment'), patch.object(setup.shutil, 'which', return_value='tool'), patch.object(setup, 'run', side_effect=execute), patch.object(setup, 'run_application', side_effect=record_application_run(commands)), patch.object(setup, 'project_executable', return_value='kotavel-lab'), patch.object(setup.sys, 'argv', ['install.py', '--configure-only', '--run', '--build-type', 'Release']), patch.object(setup, 'success_banner') as banner:
                     if fail_tests:
                         with self.assertRaises(subprocess.CalledProcessError):
                             setup.main()

@@ -4,6 +4,7 @@
 
 #include <kotavel/contracts/process_metrics_provider.hpp>
 #include <kotavel/contracts/platform_services.hpp>
+#include <kotavel/contracts/network_addresses_provider.hpp>
 #include <kotavel/contracts/runtime_paths.hpp>
 #include <kotavel/contracts/system_paths.hpp>
 #include <kotavel/container/container.hpp>
@@ -17,6 +18,9 @@ make_process_metrics_provider();
 
 [[nodiscard]] std::unique_ptr<contracts::RuntimePathResolver>
 make_runtime_path_resolver();
+
+[[nodiscard]] std::unique_ptr<contracts::NetworkAddressesProvider>
+make_network_addresses_provider();
 
 void configure_console_output() noexcept;
 

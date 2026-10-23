@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -15,6 +16,49 @@ class PosixPlatform(PlatformAdapter):
     python_executable = 'python'
     conan_executable = 'conan'
     activation_kind = 'posix'
+
+    def process_command_line(self, process_id):
+        if sys.platform.startswith('linux'):
+            try:
+                raw = Path(f'/proc/{process_id}/cmdline').read_bytes()
+            except FileNotFoundError:
+                return None
+            return [part.decode(errors='replace') for part in raw.split(b'\0') if part]
+        result = subprocess.run(['ps', '-p', str(process_id), '-o', 'args='],
+                                capture_output=True, text=True, check=False)
+        if result.returncode != 0 or not result.stdout.strip():
+            return None
+        import shlex
+        return shlex.split(result.stdout.strip())
+
+    def request_process_stop(self, process_id):
+        os.kill(process_id, signal.SIGTERM)
+
+    def force_process_stop(self, process_id):
+        os.kill(process_id, signal.SIGKILL)
+
+    def run_application(self, command, *, cwd, env):
+        result = subprocess.run(command, cwd=cwd, env=env, check=False)
+        if result.returncode not in (0, -signal.SIGTERM, -signal.SIGINT):
+            raise subprocess.CalledProcessError(result.returncode, command)
+
+    def process_is_running(self, process_id):
+        try:
+            os.kill(process_id, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+
+        # `kill(pid, 0)` also succeeds for zombies. They have already exited
+        # and cannot be stopped again, so treat them as terminated while the
+        # parent process is still waiting to reap them.
+        result = subprocess.run(['ps', '-p', str(process_id), '-o', 'stat='],
+                                capture_output=True, text=True, check=False)
+        state = result.stdout.strip()
+        if result.returncode == 0 and state.startswith('Z'):
+            return False
+        return True
 
     def prepare(self, config, env, configure_only, *, tools, scripts, run_command,
                 write_if_changed):

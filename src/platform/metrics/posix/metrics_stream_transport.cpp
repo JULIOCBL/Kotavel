@@ -3,8 +3,11 @@
 
 #include <arpa/inet.h>
 #include <cerrno>
+#include <csignal>
+#include <limits>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -99,4 +102,10 @@ std::unique_ptr<LocalMetricsServer> make_local_metrics_server() {
     return std::make_unique<PosixMetricsServer>();
 }
 std::uint64_t current_process_id() noexcept { return static_cast<std::uint64_t>(getpid()); }
+bool process_is_running(std::uint64_t process_id) noexcept {
+    if (process_id == 0 || process_id >
+        static_cast<std::uint64_t>((std::numeric_limits<pid_t>::max)())) return false;
+    if (::kill(static_cast<pid_t>(process_id), 0) == 0) return true;
+    return errno != ESRCH;
+}
 } // namespace kotavel::platform::detail

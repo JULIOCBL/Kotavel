@@ -913,8 +913,9 @@ bool FormRequest::validate() {
             (void)argument;
             return rule == "numeric" || rule == "integer" || rule == "decimal";
         });
+        const bool bail = std::find(field_rules.begin(), field_rules.end(), "bail") != field_rules.end();
+        const bool null_value = is_null(field);
         bool field_valid = true;
-        bool stop_field = false;
         for (const auto& encoded_rule : field_rules) {
             const auto [rule, argument] = rule_parts(encoded_rule);
             if (rule == "nullable" || rule == "sometimes" || rule == "exclude" ||
@@ -935,7 +936,7 @@ bool FormRequest::validate() {
                 if (!conditional_rule_passes(*this, field, rule, argument)) {
                     errors_.push_back({"Validation Failed", message_for(field, rule, argument), field});
                     field_valid = false;
-                    if (std::find(field_rules.begin(), field_rules.end(), "bail") != field_rules.end()) break;
+                    if (bail) break;
                 }
                 continue;
             }
@@ -945,37 +946,35 @@ bool FormRequest::validate() {
                 if (!current_password_matches(value.value_or(std::string_view{}), argument)) {
                     errors_.push_back({"Validation Failed", message_for(field, rule, argument), field});
                     field_valid = false;
-                    if (std::find(field_rules.begin(), field_rules.end(), "bail") != field_rules.end()) break;
+                    if (bail) break;
                 }
                 continue;
             }
-            if (is_null(field)) {
+            if (null_value) {
                 if (nullable) continue;
                 errors_.push_back({"Validation Failed", message_for(field, rule, argument), field});
                 field_valid = false;
-                if (std::find(field_rules.begin(), field_rules.end(), "bail") != field_rules.end()) break;
+                if (bail) break;
                 continue;
             }
             if (!accepts(*this, field, value.value_or(std::string_view{}), rule, argument,
                          numeric_attribute)) {
                 errors_.push_back({"Validation Failed", message_for(field, rule, argument), field});
                 field_valid = false;
-                if (std::find(field_rules.begin(), field_rules.end(), "bail") != field_rules.end()) {
-                    stop_field = true;
+                if (bail) {
                     break;
                 }
             }
         }
-        (void)stop_field;
         if (field_valid && present) {
             if (value && !composite) validated_.insert_or_assign(field, std::string(*value));
             else if (const auto* uploaded = file(field))
                 validated_.insert_or_assign(field, uploaded->name);
             else if (composite) {
-                const auto flattened = all();
                 const std::string prefix = field + ".";
-                for (const auto& [key, item] : flattened)
-                    if (key.starts_with(prefix)) validated_.insert_or_assign(key, item);
+                for (auto item = request_values.lower_bound(prefix);
+                     item != request_values.end() && item->first.starts_with(prefix); ++item)
+                    validated_.insert_or_assign(item->first, item->second);
             }
         }
     }

@@ -7,10 +7,10 @@ import sys
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
-from kotavel_cli import cli, deps, install, monitor
+from kotavel_cli import cli, deps, install, monitor, stop
 
 
 class ConsumerToolsTests(unittest.TestCase):
@@ -45,13 +45,16 @@ class ConsumerToolsTests(unittest.TestCase):
         ])
 
     def test_run_application_passes_uri_after_runtime_options(self):
-        with patch.object(install, 'ROOT', self.root), patch.object(install, 'run') as command:
+        platform = Mock()
+        platform.executable_for_run.return_value = Path('build/kotavel-lab')
+        platform.runtime_environment.return_value = {'PATH': ''}
+        with patch.object(install, 'ROOT', self.root), patch.object(install, 'get_platform', return_value=platform):
             install.run_application(Path('build/kotavel-lab'), 'development',
                                     'kotavel://pos/home', {'PATH': ''})
-        command.assert_called_once_with([
+        platform.run_application.assert_called_once_with([
             Path('build/kotavel-lab'), '--env=development',
             '--project-root=' + str(self.root), 'kotavel://pos/home',
-        ], {'PATH': ''})
+        ], cwd=self.root, env={'PATH': ''})
 
     def test_runtime_environment_loads_conan_paths_only_on_windows(self):
         generators = self.root / 'build' / 'Release' / 'generators'
@@ -99,6 +102,11 @@ class ConsumerToolsTests(unittest.TestCase):
     def test_monitor_command_dispatches_with_selected_project(self):
         with patch.object(monitor, 'main', return_value=0) as command:
             self.assertEqual(cli.main(['--project', str(self.root), 'monitor', '--pid', '123']), 0)
+        command.assert_called_once_with(['--pid', '123', '--project', str(self.root.resolve())])
+
+    def test_stop_command_dispatches_with_selected_project(self):
+        with patch.object(stop, 'main', return_value=0) as command:
+            self.assertEqual(cli.main(['--project', str(self.root), 'stop', '--pid', '123']), 0)
         command.assert_called_once_with(['--pid', '123', '--project', str(self.root.resolve())])
 
     def test_monitor_formats_startup_and_sample_events(self):

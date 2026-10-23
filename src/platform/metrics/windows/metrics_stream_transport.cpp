@@ -112,4 +112,12 @@ std::unique_ptr<LocalMetricsServer> make_local_metrics_server() {
     return std::make_unique<WindowsMetricsServer>();
 }
 std::uint64_t current_process_id() noexcept { return GetCurrentProcessId(); }
+bool process_is_running(std::uint64_t process_id) noexcept {
+    if (process_id == 0 || process_id > (std::numeric_limits<DWORD>::max)()) return false;
+    const HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, static_cast<DWORD>(process_id));
+    if (!process) return GetLastError() != ERROR_INVALID_PARAMETER;
+    const DWORD state = WaitForSingleObject(process, 0);
+    CloseHandle(process);
+    return state != WAIT_OBJECT_0;
+}
 } // namespace kotavel::platform::detail
