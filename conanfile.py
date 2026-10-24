@@ -5,10 +5,11 @@ import os
 
 # La receta es la fuente de las dependencias del framework en ambos modos.
 # Mantén estas constantes literales: el consumidor local las lee sin ejecutar la receta.
-FRAMEWORK_REQUIRES = ("rapidjson/1.1.0",)
-# RapidJSON 1.1.0 has an invalid assignment operator rejected by Clang 23.
-# Keep the existing dependency on macOS/Linux; use the fixed upstream snapshot on Windows.
-FRAMEWORK_PLATFORM_REQUIRES = {"Windows": ("rapidjson/cci.20250205",)}
+FRAMEWORK_REQUIRES = ("rapidjson/cci.20250205", "sqlite3/3.54.0")
+# The CCI snapshot fixes RapidJSON 1.1.0's Clang 23 assignment error and its
+# lazy-stack pointer arithmetic reported by UBSan. Use one header version on
+# every platform so the public build and sanitizer matrix stay consistent.
+FRAMEWORK_PLATFORM_REQUIRES = {}
 FRAMEWORK_OPTIONAL_REQUIRES = {
     "http": ("drogon/1.9.13",),
     "desktop": ("qt/6.11.1",),
@@ -106,7 +107,7 @@ class KotavelConan(ConanFile):
     def package_info(self):
         # CMakeDeps expone el mismo target público que la compilación desde carpeta.
         self.cpp_info.set_property("cmake_file_name", "Kotavel")
-        # RapidJSON compila el backend privado, pero no forma parte de la API instalada.
+        # RapidJSON es privado; SQLite forma parte del enlace del contrato de sesiones.
         self.cpp_info.ignored_requires = ["rapidjson"]
         core = self.cpp_info.components["core"]
         core.set_property("cmake_target_name", "Kotavel::Core")
@@ -114,13 +115,14 @@ class KotavelConan(ConanFile):
         contract = self.cpp_info.components["http_contract"]
         contract.set_property("cmake_target_name", "Kotavel::HttpContract")
         contract.libs = ["kotavel_http_contract"]
-        contract.requires = ["core"]
+        contract.requires = ["core", "sqlite3::sqlite"]
         if self.settings.os == "Windows":
-            # Session adapter uses BCryptGenRandom and user-specific filesystem ACLs.
+            # Session IDs use BCryptGenRandom.
             contract.system_libs = ["bcrypt", "advapi32"]
         desktop = self.cpp_info.components["desktop"]
         desktop.set_property("cmake_target_name", "Kotavel::Desktop")
         desktop.libs = ["kotavel_desktop"]
+        desktop.requires = ["http_contract"]
         if self.options.with_desktop:
             desktop_qt = self.cpp_info.components["desktop_qt"]
             desktop_qt.set_property("cmake_target_name", "Kotavel::DesktopQt")

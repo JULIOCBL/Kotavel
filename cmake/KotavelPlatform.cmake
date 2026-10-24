@@ -20,7 +20,7 @@ if(WIN32)
         src/platform/networking/windows/network_addresses.cpp
         src/platform/metrics/windows/metrics_stream_transport.cpp)
     set(KOTAVEL_PLATFORM_LIBRARIES Psapi Ws2_32 Iphlpapi)
-    set(KOTAVEL_HTTP_PLATFORM_SOURCES src/platform/security/windows/session_files.cpp)
+    set(KOTAVEL_HTTP_PLATFORM_SOURCES src/platform/security/windows/session_random.cpp)
     set(KOTAVEL_HTTP_PLATFORM_LIBRARIES Bcrypt)
     set(KOTAVEL_FILESYSTEM_PLATFORM_SOURCES src/platform/filesystem/windows/filesystem.cpp)
     set(KOTAVEL_FILESYSTEM_PLATFORM_LIBRARIES Advapi32)
@@ -40,7 +40,7 @@ elseif(APPLE)
         src/platform/networking/posix/network_addresses.cpp
         src/platform/networking/macos/socket_signal.cpp
         src/platform/metrics/posix/metrics_stream_transport.cpp)
-    set(KOTAVEL_HTTP_PLATFORM_SOURCES src/platform/security/posix/session_files.cpp)
+    set(KOTAVEL_HTTP_PLATFORM_SOURCES src/platform/security/posix/session_random.cpp)
     set(KOTAVEL_FILESYSTEM_PLATFORM_SOURCES src/platform/filesystem/posix/filesystem.cpp)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(KOTAVEL_PLATFORM_NAME "linux")
@@ -58,7 +58,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         src/platform/networking/posix/network_addresses.cpp
         src/platform/networking/linux/socket_signal.cpp
         src/platform/metrics/posix/metrics_stream_transport.cpp)
-    set(KOTAVEL_HTTP_PLATFORM_SOURCES src/platform/security/posix/session_files.cpp)
+    set(KOTAVEL_HTTP_PLATFORM_SOURCES src/platform/security/posix/session_random.cpp)
     set(KOTAVEL_FILESYSTEM_PLATFORM_SOURCES src/platform/filesystem/posix/filesystem.cpp)
 else()
     message(FATAL_ERROR "Unsupported Kotavel platform: ${CMAKE_SYSTEM_NAME}")

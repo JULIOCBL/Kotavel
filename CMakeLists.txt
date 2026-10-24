@@ -78,6 +78,12 @@ target_link_libraries(kotavel_core PUBLIC Kotavel::Filesystem)
 
 # API y web son opcionales; solo este adaptador incorpora Drogon al ejecutable.
 find_package(RapidJSON CONFIG REQUIRED)
+find_package(SQLite3 REQUIRED)
+if(TARGET SQLite3::SQLite3)
+    set(KOTAVEL_SQLITE_TARGET SQLite3::SQLite3)
+else()
+    set(KOTAVEL_SQLITE_TARGET SQLite::SQLite3)
+endif()
 add_library(kotavel_http_contract STATIC
     src/http/router.cpp
     src/http/kernel.cpp
@@ -86,7 +92,8 @@ add_library(kotavel_http_contract STATIC
     src/http/form_request.cpp
     src/http/session_middleware.cpp
     src/session/session.cpp
-    src/session/file_session_store.cpp
+    src/session/cached_session_store.cpp
+    src/session/sqlite_session_store.cpp
     ${KOTAVEL_HTTP_PLATFORM_SOURCES})
 add_library(Kotavel::HttpContract ALIAS kotavel_http_contract)
 target_compile_features(kotavel_http_contract PUBLIC cxx_std_23)
@@ -95,7 +102,7 @@ target_include_directories(kotavel_http_contract PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
 target_link_libraries(kotavel_http_contract PUBLIC Kotavel::Core Kotavel::Filesystem
-    PRIVATE $<BUILD_INTERFACE:rapidjson> ${KOTAVEL_HTTP_PLATFORM_LIBRARIES})
+    PRIVATE $<BUILD_INTERFACE:rapidjson> ${KOTAVEL_SQLITE_TARGET} ${KOTAVEL_HTTP_PLATFORM_LIBRARIES})
 
 add_library(kotavel_desktop STATIC
     src/desktop/desktop.cpp)
@@ -105,6 +112,7 @@ set_target_properties(kotavel_desktop PROPERTIES CXX_EXTENSIONS OFF EXPORT_NAME 
 target_include_directories(kotavel_desktop PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>)
+target_link_libraries(kotavel_desktop PUBLIC kotavel_http_contract)
 
 if(KOTAVEL_BUILD_DESKTOP_QT)
     find_package(Qt6 REQUIRED COMPONENTS Gui Qml Quick)
@@ -237,6 +245,10 @@ if(KOTAVEL_BUILD_TESTS)
     target_link_libraries(kotavel_http_session_tests PRIVATE Kotavel::HttpContract)
     add_test(NAME kotavel.session COMMAND kotavel_http_session_tests)
     set_tests_properties(kotavel.session PROPERTIES TIMEOUT 30)
+    add_test(NAME kotavel.session.crash_recovery COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/session_crash_recovery.py
+        $<TARGET_FILE:kotavel_http_session_tests>)
+    set_tests_properties(kotavel.session.crash_recovery PROPERTIES TIMEOUT 30)
     add_executable(kotavel_http_session_integration_tests
         tests/integration/session/session_integration.cpp)
     target_link_libraries(kotavel_http_session_integration_tests PRIVATE Kotavel::HttpContract)
@@ -250,6 +262,11 @@ if(KOTAVEL_BUILD_TESTS)
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/http_transport.py
             $<TARGET_FILE:kotavel_http_transport_fixture>)
         set_tests_properties(kotavel.http.transport PROPERTIES TIMEOUT 30)
+        add_test(NAME kotavel.http.session.processes COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/http_session_load.py
+            $<TARGET_FILE:kotavel_http_transport_fixture>
+            --clients 32 --seconds 3 --instances 2 --workload shared)
+        set_tests_properties(kotavel.http.session.processes PROPERTIES TIMEOUT 45)
     endif()
     add_executable(kotavel_diagnostics_tests tests/unit/diagnostics/diagnostics_tests.cpp)
     target_link_libraries(kotavel_diagnostics_tests PRIVATE Kotavel::Core)
@@ -281,6 +298,21 @@ if(KOTAVEL_BUILD_BENCHMARKS)
     target_link_libraries(kotavel_core_benchmark PRIVATE Kotavel::Core)
     add_executable(kotavel_http_benchmark benchmarks/http_benchmark.cpp)
     target_link_libraries(kotavel_http_benchmark PRIVATE Kotavel::HttpContract)
+    add_executable(kotavel_session_benchmark benchmarks/session_benchmark.cpp)
+    target_link_libraries(kotavel_session_benchmark PRIVATE Kotavel::HttpContract)
+    if(KOTAVEL_BUILD_TESTS)
+        add_test(NAME kotavel.session.benchmark_independent_500
+            COMMAND kotavel_session_benchmark 500 2 independent 0)
+        add_test(NAME kotavel.session.benchmark_shared_keys_500
+            COMMAND kotavel_session_benchmark 500 2 shared-keys 0)
+        add_test(NAME kotavel.session.benchmark_shared_counter_1000
+            COMMAND kotavel_session_benchmark 1000 2 shared 0)
+        set_tests_properties(
+            kotavel.session.benchmark_independent_500
+            kotavel.session.benchmark_shared_keys_500
+            kotavel.session.benchmark_shared_counter_1000
+            PROPERTIES TIMEOUT 60)
+    endif()
 endif()
 
 if(MSVC)

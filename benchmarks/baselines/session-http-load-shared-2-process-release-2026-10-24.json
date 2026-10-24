@@ -1,0 +1,20 @@
+{
+  "timestamp_utc": "2026-10-24T13:23:34.753142+00:00",
+  "system": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
+  "build": "Release macOS ARM64",
+  "source_sha256": "1c15d70fb3ce976efa27b7c37e3a4d9ae2b05128a0e5c27edd24ed9a5bcdcf7c",
+  "workload": "shared",
+  "clients": 500,
+  "instances": 2,
+  "seconds": 10,
+  "offered_rps": 1000,
+  "requests": 10000,
+  "writes": 2000,
+  "write_fraction": 0.2,
+  "throughput_rps": 997.6284998818597,
+  "p50_ms": 0.6125625,
+  "p95_ms": 1.989333,
+  "p99_ms": 3.229417,
+  "failures": 0,
+  "durable_writes_recovered": 2000
+}

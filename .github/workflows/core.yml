@@ -22,11 +22,11 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check "conan>=2,<3"
           conan profile detect --force
-          conan install . --build=missing -s:h build_type=${{ matrix.build }} -s:b build_type=${{ matrix.build }}
+          conan install . --build=missing -s:h build_type=${{ matrix.build }} -s:b build_type=${{ matrix.build }} -o '&:with_http=True'
       - name: Locate Conan toolchain
         run: >-
           python -c "import os; from pathlib import Path; files = list(Path('build').rglob('conan_toolchain.cmake')); assert len(files) == 1, f'Expected one Conan toolchain, found: {files}'; open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8').write('KOTAVEL_CONAN_TOOLCHAIN=' + str(files[0].resolve()) + os.linesep)"
-      - run: cmake -S . -B build/ci "-DCMAKE_TOOLCHAIN_FILE=${{ env.KOTAVEL_CONAN_TOOLCHAIN }}" -DCMAKE_BUILD_TYPE=${{ matrix.build }} -DKOTAVEL_BUILD_TESTS=ON
+      - run: cmake -S . -B build/ci "-DCMAKE_TOOLCHAIN_FILE=${{ env.KOTAVEL_CONAN_TOOLCHAIN }}" -DCMAKE_BUILD_TYPE=${{ matrix.build }} -DKOTAVEL_BUILD_TESTS=ON -DKOTAVEL_BUILD_BENCHMARKS=ON
       - run: cmake --build build/ci --config ${{ matrix.build }} --parallel 2
       - run: ctest --test-dir build/ci -C ${{ matrix.build }} --output-on-failure
   sanitizers:
@@ -58,3 +58,8 @@ jobs:
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=${{ matrix.sanitizer }}"
       - run: cmake --build build/sanitizers --parallel 2
       - run: ctest --test-dir build/sanitizers --output-on-failure
+        env:
+          # SQLite's WAL index intentionally reads/writes redundant headers
+          # concurrently and documents these TSan false positives upstream.
+          # This suppression only covers those two SQLite implementation routines.
+          TSAN_OPTIONS: suppressions=${{ github.workspace }}/tests/sanitizers/sqlite-wal.supp

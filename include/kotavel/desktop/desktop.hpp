@@ -6,7 +6,10 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
+
+#include <kotavel/session/context.hpp>
 
 namespace kotavel::desktop {
 
@@ -92,7 +95,8 @@ public:
 class DesktopKernel final {
 public:
     explicit DesktopKernel(std::unique_ptr<DesktopPlatform> platform,
-                           std::filesystem::path views_root = "resources/views");
+                           std::filesystem::path views_root = "resources/views",
+                           std::shared_ptr<kotavel::session::Context> session_context = {});
     DesktopKernel(const DesktopKernel&) = delete;
     DesktopKernel& operator=(const DesktopKernel&) = delete;
 
@@ -104,23 +108,29 @@ private:
     std::unique_ptr<DesktopPlatform> platform_;
     std::filesystem::path views_root_;
     DesktopRouter routes_;
+    std::shared_ptr<kotavel::session::Context> session_context_;
 };
 
 // Un contexto de corta duración evita guardar acceso global al runtime gráfico.
 class DesktopContext final {
 public:
-    DesktopContext(DesktopRouter& routes, WindowManager& windows)
-        : routes_(&routes), windows_(&windows) {}
+    DesktopContext(DesktopRouter& routes, WindowManager& windows,
+                   std::shared_ptr<kotavel::session::Context> session_context = {})
+        : routes_(&routes), windows_(&windows), session_context_(std::move(session_context)) {}
 
     void show(std::string_view window_id, const WindowSettings& settings,
               const View& view);
     void close(std::string_view window_id) noexcept;
     [[nodiscard]] bool is_visible(std::string_view window_id) const noexcept;
     [[nodiscard]] DispatchResult navigate(std::string_view path);
+    [[nodiscard]] std::shared_ptr<kotavel::session::Context> session_context() const noexcept {
+        return session_context_;
+    }
 
 private:
     DesktopRouter* routes_;
     WindowManager* windows_;
+    std::shared_ptr<kotavel::session::Context> session_context_;
 };
 
 // Traduce URIs de esquema registrado a rutas desktop internas.

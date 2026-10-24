@@ -110,8 +110,10 @@ Route Route::name(std::string_view route_name) const {
 }
 
 DesktopKernel::DesktopKernel(std::unique_ptr<DesktopPlatform> platform,
-                             std::filesystem::path views_root)
-    : platform_(std::move(platform)), views_root_(std::move(views_root)) {
+                             std::filesystem::path views_root,
+                             std::shared_ptr<kotavel::session::Context> session_context)
+    : platform_(std::move(platform)), views_root_(std::move(views_root)),
+      session_context_(std::move(session_context)) {
     if (!platform_) throw std::invalid_argument("Desktop platform cannot be null");
 }
 
@@ -150,12 +152,12 @@ int DesktopKernel::run(int argc, char** argv, std::string_view scheme) {
 
     platform_->set_deep_link_handler([this, configured_scheme = std::string(scheme)](
                                          std::string_view uri, WindowManager& windows) {
-        DesktopContext context(routes_, windows);
+        DesktopContext context(routes_, windows, session_context_);
         (void)dispatch_deep_link(routes_, uri, configured_scheme, context);
     });
 
     return platform_->run(platform_argc, platform_argv.data(), views_root_, [this, startup_route](WindowManager& windows) {
-        DesktopContext context(routes_, windows);
+        DesktopContext context(routes_, windows, session_context_);
         const auto result = routes_.dispatch(startup_route, context);
         if (result != DispatchResult::dispatched)
             throw std::logic_error("Desktop startup route could not be dispatched");

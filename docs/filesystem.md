@@ -24,15 +24,6 @@ bloqueo, escritura segura, reemplazo atómico y permisos se implementan en
 `src/platform/filesystem/<plataforma>/`; CMake selecciona el adaptador para el
 sistema objetivo.
 
-## Uso desde sesiones
-
-`kotavel::http::FileSessionStore` recibe `kotavel::contracts::Filesystem` por
-inyección y utiliza `kotavel::filesystem::LocalFilesystem` por defecto. La
-serialización y las reglas de expiración permanecen en el módulo Session; las
-operaciones generales de almacenamiento pertenecen a Filesystem. El middleware
-que conecta Session con Request, cookies y respuestas permanece en HTTP. Consulta
-[Sesiones](sessions.md) para configurar el almacenamiento de sesiones.
-
 ## Enumeración incremental
 
 `scan_files(directory)` devuelve un `FileCursor` no recursivo.

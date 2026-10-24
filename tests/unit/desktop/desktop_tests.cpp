@@ -1,6 +1,8 @@
 #include <kotavel/desktop/desktop.hpp>
 
 #include <cstdlib>
+#include <chrono>
+#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -211,6 +213,42 @@ void test_kernel_default_route_and_startup_failures() {
     check(observed_deep_link->windows.views["main"] == "desktop.pos.home",
           "startup deep link should select its matching desktop route");
 }
+
+void test_desktop_kernel_exposes_persistent_shared_context() {
+    const auto root = std::filesystem::temp_directory_path() /
+        ("kotavel-desktop-context-" + std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count()));
+    auto store = std::make_shared<kotavel::http::SQLiteSessionStore>(root / "sessions.sqlite3");
+    auto resolver = std::make_shared<kotavel::session::ContextResolver>(store);
+    auto shared_context = std::make_shared<kotavel::session::Context>(
+        kotavel::session::Context::create(resolver));
+    shared_context->put("company.id", kotavel::http::JsonValue{15});
+
+    auto platform = std::make_unique<FakePlatform>();
+    auto* observed = platform.get();
+    kotavel::desktop::DesktopKernel kernel(std::move(platform), "resources/views", shared_context);
+    bool saw_context = false;
+    bool retained_context = false;
+    kernel.routes().get("/", [&saw_context, &retained_context, &shared_context](
+            kotavel::desktop::DesktopContext& context) {
+        const auto session_context = context.session_context();
+        if (!session_context) return;
+        retained_context = session_context == shared_context;
+        const auto company = session_context->get("company.id");
+        saw_context = company && std::get<std::int64_t>(company->value()) == 15;
+    });
+    char program[] = "kotavel-lab";
+    char* argv[] = {program};
+    (void)kernel.run(1, argv);
+    check(saw_context,
+          "Desktop startup routes can read durable shared context values through the injected context");
+    check(retained_context,
+          "Desktop context retains its configured shared context handle");
+    check(observed->received_root == "resources/views",
+          "shared session context does not alter the configured views root");
+    std::error_code ignored;
+    std::filesystem::remove_all(root, ignored);
+}
 }
 
 int main() {
@@ -219,6 +257,7 @@ int main() {
         test_routes_and_duplicate_validation();
         test_deep_link_translation_and_context_lifetime();
         test_kernel_default_route_and_startup_failures();
+        test_desktop_kernel_exposes_persistent_shared_context();
         if (failures != 0) {
             std::cerr << failures << " desktop test(s) failed\n";
             return EXIT_FAILURE;

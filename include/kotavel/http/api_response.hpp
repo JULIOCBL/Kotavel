@@ -52,6 +52,8 @@ public:
     JsonValue(Array value) : value_(std::move(value)) {}
     JsonValue(Object value) : value_(std::move(value)) {}
 
+    friend bool operator==(const JsonValue&, const JsonValue&) = default;
+
     [[nodiscard]] const Storage& value() const noexcept { return value_; }
 
 private:

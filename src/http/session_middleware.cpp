@@ -1,14 +1,18 @@
 #include <kotavel/http/session_middleware.hpp>
 
 #include "../session/session_internal.hpp"
+#include "../session/session_size.hpp"
 
 #include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cctype>
+#include <condition_variable>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 
 namespace kotavel::http {
@@ -109,33 +113,73 @@ private:
 
 contracts::SessionRecord new_record() {
     const auto now = now_seconds();
-    return {detail::generate_session_id(), now, now, now, {}};
+    return {detail::generate_session_id(), now, now, now, {}, 0};
 }
 
-struct SessionMaintenance {
+class SessionMaintenance final {
+public:
+    explicit SessionMaintenance(std::shared_ptr<contracts::SessionStore> store)
+        : store_(std::move(store)), worker_([this] { run(); }) {}
+
+    ~SessionMaintenance() {
+        {
+            std::lock_guard guard(mutex_);
+            stopping_ = true;
+        }
+        ready_.notify_one();
+        if (worker_.joinable()) worker_.join();
+    }
+
+    SessionMaintenance(const SessionMaintenance&) = delete;
+    SessionMaintenance& operator=(const SessionMaintenance&) = delete;
+
     std::atomic_uint64_t requests{0};
     std::atomic_int64_t last_collection{0};
-    std::atomic_flag collecting = ATOMIC_FLAG_INIT;
 
-    void collect_if_due(contracts::SessionStore& store) {
+    void collect_if_due() {
         const auto request_number = requests.fetch_add(1, std::memory_order_relaxed);
-        auto now = now_seconds();
+        const auto now = now_seconds();
         constexpr std::int64_t time_interval_seconds = 60;
         const auto last = last_collection.load(std::memory_order_relaxed);
         const bool request_interval_due = request_number % 100 == 0;
         const bool time_interval_due = last == 0 || now - last >= time_interval_seconds;
-        if ((!request_interval_due && !time_interval_due) ||
-            collecting.test_and_set(std::memory_order_acquire)) return;
-        struct Release {
-            std::atomic_flag& flag;
-            ~Release() { flag.clear(std::memory_order_release); }
-        } release{collecting};
-        now = now_seconds();
-        // Throttle retries after a failed sweep; the request cadence still
-        // provides another retry before the next minute on active applications.
-        last_collection.store(now, std::memory_order_relaxed);
-        store.collect_expired(now);
+        if (!request_interval_due && !time_interval_due) return;
+        {
+            std::lock_guard guard(mutex_);
+            if (stopping_ || pending_ || running_) return;
+            pending_ = true;
+            last_collection.store(now, std::memory_order_relaxed);
+        }
+        ready_.notify_one();
     }
+
+private:
+    void run() noexcept {
+        for (;;) {
+            {
+                std::unique_lock guard(mutex_);
+                ready_.wait(guard, [this] { return stopping_ || pending_; });
+                if (stopping_ && !pending_) return;
+                pending_ = false;
+                running_ = true;
+            }
+            try { store_->collect_expired(now_seconds()); }
+            catch (...) { collection_failures_.fetch_add(1, std::memory_order_relaxed); }
+            {
+                std::lock_guard guard(mutex_);
+                running_ = false;
+            }
+        }
+    }
+
+    std::shared_ptr<contracts::SessionStore> store_;
+    std::mutex mutex_;
+    std::condition_variable ready_;
+    bool pending_ = false;
+    bool running_ = false;
+    bool stopping_ = false;
+    std::atomic_uint64_t collection_failures_{0};
+    std::thread worker_;
 };
 }
 Middleware start_session(SessionConfig config,
@@ -146,6 +190,15 @@ Middleware start_session(SessionConfig config,
         throw std::invalid_argument("SESSION_ENCRYPT=true is unsupported until session encryption is implemented");
     if (config.lifetime <= std::chrono::minutes::zero())
         throw std::invalid_argument("Session lifetime must be greater than zero");
+    if (config.max_lifetime < std::chrono::minutes::zero())
+        throw std::invalid_argument("Session maximum lifetime cannot be negative");
+    if (config.max_session_bytes == 0)
+        throw std::invalid_argument("Session maximum size must be greater than zero");
+    if (config.sqlite_read_connections == 0 || config.sqlite_write_queue_capacity == 0)
+        throw std::invalid_argument("SQLite session connection and queue limits must be greater than zero");
+    if (config.sqlite_write_batch_window < std::chrono::microseconds::zero() ||
+        config.sqlite_write_batch_window > std::chrono::milliseconds(10))
+        throw std::invalid_argument("SQLite session write batch window must be between 0 and 10000 microseconds");
     if (config.transport != SessionTransport::cookie && config.transport != SessionTransport::header)
         throw std::invalid_argument("Session transport is not supported");
 
@@ -171,58 +224,72 @@ Middleware start_session(SessionConfig config,
         }
     }
 
-    auto maintenance = std::make_shared<SessionMaintenance>();
+    auto maintenance = std::make_shared<SessionMaintenance>(store);
     return [config = std::move(config), store = std::move(store), maintenance = std::move(maintenance),
             identifier_transport = std::move(identifier_transport)]
         (const Request& request, const Next& next) -> Response {
         // Each middleware owns its maintenance cadence. Concurrent workers never
         // queue redundant sweeps while one is already scanning this store.
-        maintenance->collect_if_due(*store);
+        maintenance->collect_if_due();
         auto client_id = identifier_transport->read(request);
         if (client_id && !detail::valid_session_id(*client_id)) client_id.reset();
-        auto record = client_id ? contracts::SessionRecord{} : new_record();
+        std::shared_ptr<const contracts::SessionRecord> record;
         if (client_id) {
-            auto lock = store->lock(*client_id);
-            auto loaded = store->load(*client_id);
-            if (loaded && loaded->expires_at > now_seconds()) {
-                record = std::move(*loaded);
-            } else {
-                store->remove(*client_id);
-                lock.reset();
-                record = new_record();
-                lock = store->lock(record.id);
-                auto scope = detail::SessionScope(*store, std::move(record), config);
-                auto response = next();
-                scope.save();
-                identifier_transport->write(response, scope.record().id);
-                return response;
+            std::shared_ptr<const contracts::SessionRecord> loaded;
+            {
+                auto lock = store->lock(*client_id);
+                if (auto* snapshots = dynamic_cast<contracts::SessionSnapshotStore*>(store.get())) {
+                    loaded = snapshots->load_snapshot(*client_id);
+                } else if (auto value = store->load(*client_id)) {
+                    loaded = std::make_shared<const contracts::SessionRecord>(std::move(*value));
+                }
+                const auto now = now_seconds();
+                const bool absolute_expired = loaded &&
+                    config.max_lifetime > std::chrono::minutes::zero() &&
+                    now >= loaded->created_at && now - loaded->created_at >=
+                        std::chrono::duration_cast<std::chrono::seconds>(config.max_lifetime).count();
+                const auto estimated_values_size = loaded && loaded->estimated_values_bytes != 0
+                    ? loaded->estimated_values_bytes
+                    : loaded ? detail::estimate_session_values_size(loaded->values) : 0;
+                const bool oversized = loaded &&
+                    estimated_values_size > config.max_session_bytes;
+                if (!loaded || loaded->expires_at <= now || absolute_expired || oversized) {
+                    store->remove(*client_id);
+                    loaded.reset();
+                }
             }
-            auto scope = detail::SessionScope(*store, std::move(record), config);
-            // Keep the initial identifier's lock through downstream code and persistence.
-            // It is captured here to make its lifetime explicit in this scope.
-            auto response = next();
-            scope.save();
-            identifier_transport->write(response, scope.record().id);
-            return response;
+            record = loaded ? std::move(loaded) :
+                std::make_shared<const contracts::SessionRecord>(new_record());
+        } else {
+            record = std::make_shared<const contracts::SessionRecord>(new_record());
         }
 
-        auto lock = store->lock(record.id);
         auto scope = detail::SessionScope(*store, std::move(record), config);
         auto response = next();
-        scope.save();
+        if (!scope.try_save())
+            return Response{409, "text/plain; charset=utf-8",
+                            "Session changed during this request; retry with fresh state"};
         identifier_transport->write(response, scope.record().id);
         return response;
     };
 }
 
-Middleware start_file_session(SessionConfig config,
-                              const std::filesystem::path& application_root,
-                              std::shared_ptr<contracts::SessionIdentifierTransport> identifier_transport) {
-    if (config.driver != "file")
-        throw std::invalid_argument("The configured session driver is not available in this build: " + config.driver);
-    auto directory = config.files.is_absolute() ? config.files : application_root / config.files;
-    return start_session(std::move(config), std::make_shared<FileSessionStore>(std::move(directory)),
-                         std::move(identifier_transport));
+Middleware start_configured_session(
+    SessionConfig config, const std::filesystem::path& application_root,
+    std::shared_ptr<contracts::SessionIdentifierTransport> identifier_transport) {
+    std::shared_ptr<contracts::SessionStore> backing;
+    if (config.driver == "sqlite") {
+        auto database = config.database.is_absolute() ? config.database : application_root / config.database;
+        backing = std::make_shared<SQLiteSessionStore>(std::move(database),
+            config.sqlite_read_connections, config.sqlite_write_queue_capacity, 5000,
+            config.sqlite_write_batch_window);
+    } else {
+        throw std::invalid_argument("The configured session driver is not available in this build: " +
+                                    config.driver);
+    }
+    auto store = std::make_shared<CachedSessionStore>(std::move(backing),
+        config.cache_max_sessions, config.cache_max_bytes, config.cache_ttl, config.cache_shards);
+    return start_session(std::move(config), std::move(store), std::move(identifier_transport));
 }
 
 } // namespace kotavel::http

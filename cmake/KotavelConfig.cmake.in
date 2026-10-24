@@ -1,6 +1,7 @@
 @PACKAGE_INIT@
 include(CMakeFindDependencyMacro)
 find_dependency(Threads)
+find_dependency(SQLite3 REQUIRED)
 if(@KOTAVEL_BUILD_HTTP@)
     find_dependency(Drogon CONFIG REQUIRED)
 endif()

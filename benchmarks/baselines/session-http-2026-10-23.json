@@ -1,0 +1,104 @@
+{
+  "description": "Exploratory same-listener HTTP session comparison; not production capacity.",
+  "date": "2026-10-23",
+  "system": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
+  "machine": "Apple M3 Pro, arm64, 18 GiB RAM",
+  "compiler": "Apple clang version 15.0.0 (clang-1500.3.9.4)",
+  "build": "Debug, KOTAVEL_BUILD_HTTP=ON, Drogon supplied by Conan",
+  "method": "Three separate process runs after transactional session-merge changes; each uses 16 Drogon server threads and a burst of 64 loopback HTTP client connections. Routes increment one session counter atomically. JSON also contains sequential p50/p95/p99 samples. Session write batch window is 0 microseconds.",
+  "storage_difference": "Kotavel uses SQLite WAL with synchronous=FULL; Drogon native session is process memory only. This measures durable-write cost, not equivalent guarantees.",
+  "source_sha256": "48444f940a16a7d904352152bb0c865839af610a0dd376140ed81438bc793a53",
+  "hashed_sources": [
+    "tests/integration/http_transport.py",
+    "tests/integration/http_transport_fixture.cpp",
+    "src/http/session_middleware.cpp",
+    "src/session/session.cpp",
+    "src/session/sqlite_session_store.cpp",
+    "src/session/cached_session_store.cpp",
+    "include/kotavel/contracts/session_store.hpp",
+    "include/kotavel/session/session.hpp"
+  ],
+  "summary": {
+    "kotavel": {
+      "median_rps": 6632.124352355609,
+      "runs_rps": [
+        6159.967028619541,
+        6632.124352355609,
+        6641.2431576850095
+      ]
+    },
+    "drogon_native": {
+      "median_rps": 9552.83336258862,
+      "runs_rps": [
+        9005.839723954285,
+        9552.83336258862,
+        9870.005854001716
+      ]
+    }
+  },
+  "runs": [
+    {
+      "get_1000_routes": {
+        "p50_ms": 0.1093335,
+        "p95_ms": 0.125708,
+        "p99_ms": 0.136042
+      },
+      "post_100kb_json": {
+        "p50_ms": 10.5697705,
+        "p95_ms": 11.049584,
+        "p99_ms": 11.637708
+      },
+      "session_counter": {
+        "p50_ms": 0.2016455,
+        "p95_ms": 0.267791,
+        "p99_ms": 0.335208
+      },
+      "session_concurrent_64": {
+        "kotavel_requests_per_second": 6159.967028619541,
+        "drogon_native_requests_per_second": 9005.839723954285
+      }
+    },
+    {
+      "get_1000_routes": {
+        "p50_ms": 0.095542,
+        "p95_ms": 0.124792,
+        "p99_ms": 0.136916
+      },
+      "post_100kb_json": {
+        "p50_ms": 10.3657915,
+        "p95_ms": 10.776,
+        "p99_ms": 11.036542
+      },
+      "session_counter": {
+        "p50_ms": 0.181021,
+        "p95_ms": 0.234292,
+        "p99_ms": 0.258208
+      },
+      "session_concurrent_64": {
+        "kotavel_requests_per_second": 6632.124352355609,
+        "drogon_native_requests_per_second": 9552.83336258862
+      }
+    },
+    {
+      "get_1000_routes": {
+        "p50_ms": 0.0932705,
+        "p95_ms": 0.105708,
+        "p99_ms": 0.118709
+      },
+      "post_100kb_json": {
+        "p50_ms": 10.401437,
+        "p95_ms": 10.82375,
+        "p99_ms": 10.950625
+      },
+      "session_counter": {
+        "p50_ms": 0.19827050000000002,
+        "p95_ms": 0.2425,
+        "p99_ms": 0.256459
+      },
+      "session_concurrent_64": {
+        "kotavel_requests_per_second": 6641.2431576850095,
+        "drogon_native_requests_per_second": 9870.005854001716
+      }
+    }
+  ]
+}
