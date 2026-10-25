@@ -27,6 +27,11 @@ impl CliFixture {
         fs::create_dir_all(&core).unwrap();
         fs::create_dir_all(&laboratory).unwrap();
         fs::create_dir_all(&fake_path).unwrap();
+        fs::write(
+            root.join("Kotavel/Cargo.toml"),
+            "[workspace]\nmembers = [\"crates/core\", \"crates/platform\"]\n",
+        )
+        .unwrap();
         fs::write(core.join("Cargo.toml"), "[package]\nname = \"core\"\n").unwrap();
         fs::write(
             laboratory.join("Cargo.toml"),
@@ -136,14 +141,26 @@ fn install_test_and_build_execute_the_expected_cargo_subcommands() {
 
     fixture.clear_calls();
     let output = fixture.invoke(&["test", "--framework"]);
-    assert!(output.status.success());
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let workspace = fixture
+        .core
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("Cargo.toml");
     assert_eq!(
         fixture.calls(),
         [
             vec![
                 "test".into(),
                 "--manifest-path".into(),
-                fixture.core.join("Cargo.toml").display().to_string(),
+                workspace.display().to_string(),
+                "--workspace".into(),
             ],
             vec![
                 "test".into(),

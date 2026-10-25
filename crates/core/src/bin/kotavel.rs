@@ -347,7 +347,12 @@ fn execute_plan(plan: CommandPlan) -> Result<i32, String> {
                     manifests.len(),
                     manifest.display()
                 );
-                let code = cargo(manifest, "test", &arguments)?;
+                let mut test_arguments = Vec::new();
+                if index == 0 {
+                    test_arguments.push(OsString::from("--workspace"));
+                }
+                test_arguments.extend(arguments.iter().cloned());
+                let code = cargo(manifest, "test", &test_arguments)?;
                 if code != 0 {
                     return Ok(code);
                 }
@@ -508,6 +513,7 @@ fn core_manifest(project: &Path) -> Result<PathBuf, String> {
 
 fn framework_manifests(project: &Path) -> Result<Vec<PathBuf>, String> {
     let core = core_manifest(project)?;
+    let workspace = core_workspace_manifest(&core)?;
     let laboratory_candidates = [
         project.join("Cargo.toml"),
         project.join("Laboratory-Kotavel/Cargo.toml"),
@@ -526,7 +532,34 @@ fn framework_manifests(project: &Path) -> Result<Vec<PathBuf>, String> {
                 project.display()
             )
         })?;
-    Ok(vec![core, laboratory])
+    Ok(vec![workspace, laboratory])
+}
+
+fn core_workspace_manifest(core: &Path) -> Result<PathBuf, String> {
+    let core_directory = core.parent().ok_or_else(|| {
+        format!(
+            "el manifiesto del núcleo no tiene directorio padre: {}",
+            core.display()
+        )
+    })?;
+    for directory in core_directory.ancestors().skip(1) {
+        let candidate = directory.join("Cargo.toml");
+        let Ok(contents) = std::fs::read_to_string(&candidate) else {
+            continue;
+        };
+        if contents.lines().any(|line| line.trim() == "[workspace]") {
+            return candidate.canonicalize().map_err(|error| {
+                format!(
+                    "no se pudo resolver el workspace {}: {error}",
+                    candidate.display()
+                )
+            });
+        }
+    }
+    Err(format!(
+        "no se encontró el workspace Cargo del núcleo junto a {}",
+        core.display()
+    ))
 }
 
 fn cargo(manifest: &Path, subcommand: &str, arguments: &[OsString]) -> Result<i32, String> {
@@ -755,7 +788,7 @@ fn print_help() {
         ),
         (
             "test",
-            "Ejecutar pruebas; --framework incluye ambos proyectos.",
+            "Ejecutar pruebas; --framework cubre el workspace Kotavel y Laboratory.",
         ),
         ("build", "Compilar el proyecto seleccionado."),
         ("package", "Empaquetar macOS en .app, .dmg o .pkg."),
@@ -792,7 +825,7 @@ fn print_command_help(command: &str) {
         ),
         "test" => (
             "test [--framework] [FILTRO...]",
-            "Ejecuta pruebas Rust. --framework cubre Kotavel y el Laboratorio.",
+            "Ejecuta pruebas Rust. --framework cubre todos los crates de Kotavel y Laboratory.",
             "",
         ),
         "build" => (
@@ -866,6 +899,11 @@ mod tests {
         let laboratory = root.join("Laboratory-Kotavel");
         std::fs::create_dir_all(&core).unwrap();
         std::fs::create_dir_all(&laboratory).unwrap();
+        std::fs::write(
+            root.join("Kotavel/Cargo.toml"),
+            "[workspace]\nmembers = [\"crates/core\", \"crates/platform\"]\n",
+        )
+        .unwrap();
         std::fs::write(core.join("Cargo.toml"), "[package]\nname = \"core\"\n").unwrap();
         std::fs::write(
             laboratory.join("Cargo.toml"),
@@ -963,8 +1001,9 @@ mod tests {
     }
 
     #[test]
-    fn test_plans_core_and_laboratory_tests_from_the_laboratory_entrypoint() {
-        let (_directory, _root, core, laboratory) = laboratory_fixture();
+    fn test_plans_workspace_and_laboratory_tests_from_the_laboratory_entrypoint() {
+        let (_directory, root, _core, laboratory) = laboratory_fixture();
+        let workspace = root.join("Kotavel/Cargo.toml");
         assert_eq!(
             plan_command(
                 options("test", &["--framework", "--", "--nocapture"]),
@@ -972,14 +1011,18 @@ mod tests {
             )
             .unwrap(),
             CommandPlan::Test {
-                manifests: vec![core.join("Cargo.toml"), laboratory.join("Cargo.toml")],
+                manifests: vec![workspace.clone(), laboratory.join("Cargo.toml")],
                 arguments: vec!["--".into(), "--nocapture".into()],
             }
         );
         let args = ["--".into(), "--nocapture".into()];
         assert_eq!(
             [
-                ProcessSpec::cargo(&core.join("Cargo.toml"), "test", &args),
+                ProcessSpec::cargo(
+                    &workspace,
+                    "test",
+                    &["--workspace".into(), "--".into(), "--nocapture".into()]
+                ),
                 ProcessSpec::cargo(&laboratory.join("Cargo.toml"), "test", &args),
             ],
             [
@@ -988,7 +1031,8 @@ mod tests {
                     [
                         "test".into(),
                         "--manifest-path".into(),
-                        core.join("Cargo.toml").into_os_string(),
+                        workspace.into_os_string(),
+                        "--workspace".into(),
                         "--".into(),
                         "--nocapture".into(),
                     ],
@@ -1395,21 +1439,27 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let root = directory.path().canonicalize().unwrap();
         let core_root = root.join("Kotavel/crates/core");
+        let workspace = root.join("Kotavel/Cargo.toml");
         let laboratory_root = root.join("Laboratory-Kotavel");
         let core = core_root.join("Cargo.toml");
         let laboratory = laboratory_root.join("Cargo.toml");
         std::fs::create_dir_all(&core_root).unwrap();
         std::fs::create_dir_all(&laboratory_root).unwrap();
+        std::fs::write(
+            &workspace,
+            "[workspace]\nmembers = [\"crates/core\", \"crates/platform\"]\n",
+        )
+        .unwrap();
         std::fs::write(&core, "[package]\nname = \"core\"\n").unwrap();
         std::fs::write(&laboratory, "[package]\nname = \"kotavel-laboratory\"\n").unwrap();
 
         let manifests = framework_manifests(&core_root).unwrap();
-        assert_eq!(manifests, [core.clone(), laboratory.clone()]);
+        assert_eq!(manifests, [workspace.clone(), laboratory.clone()]);
         assert_eq!(core_manifest(&core_root).unwrap(), core.clone());
         assert_eq!(application_manifest(&core_root).unwrap(), core.clone());
         assert_eq!(
             framework_manifests(&laboratory_root).unwrap(),
-            [core.clone(), laboratory.clone()]
+            [workspace, laboratory.clone()]
         );
         assert_eq!(core_manifest(&laboratory_root).unwrap(), core);
         assert_eq!(application_manifest(&laboratory_root).unwrap(), laboratory);

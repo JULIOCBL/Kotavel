@@ -79,7 +79,7 @@ impl WindowManager for QtWindowManager<'_> {
             .views_root
             .parent()
             .and_then(Path::parent)
-            .map(|project_root| project_root.join("assets/branding/kotavel-icon.png"))
+            .map(|project_root| project_root.join("assets/branding/kotavel-mark.png"))
             .filter(|path| path.is_file());
         let icon = icon.as_deref().and_then(Path::to_str).unwrap_or_default();
         self.host

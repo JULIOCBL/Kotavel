@@ -42,7 +42,7 @@ src/              Implementación común organizada por módulo
 src/platform/<módulo>/<plataforma>/ Adaptadores nativos organizados por capacidad
 src/platform/<módulo>/<plataforma>/ Adaptadores nativos organizados por capacidad
 resources/messages/ Catálogos JSON de mensajes internos por módulo
-assets/branding/  Logotipo, símbolo e icono predeterminados de Kotavel
+assets/branding/  Logotipo, icono de servicios y marca para iconos de aplicaciones
 CMakeLists.txt    Target público e instalación
 conanfile.py      Resolución de dependencias y empaquetado
 tools/kotavel_cli/ Herramientas Python compartidas
@@ -57,11 +57,12 @@ docs/blueprint/   Diseño propuesto y decisiones pendientes
 
 ## Identidad visual
 
-Los recursos predeterminados de marca están en `assets/branding/`:
+Los recursos predeterminados están en `crates/core/assets/branding/` y se copian
+al proyecto consumidor cuando corresponda:
 
 - `kotavel-logo.png`: logotipo completo con el nombre Kotavel.
-- `kotavel-mark.png`: símbolo geométrico de Kotavel.
-- `kotavel-icon.png`: símbolo con llave ajustable.
+- `kotavel-icon.png`: icono de identidad para los servicios de Kotavel.
+- `kotavel-mark.png`: marca que se usa como icono de las aplicaciones.
 
 Las imágenes se conservaron tal como fueron proporcionadas, incluidos sus fondos.
 

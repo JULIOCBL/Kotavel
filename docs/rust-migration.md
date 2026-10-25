@@ -308,8 +308,9 @@ valor recuperado desde la persistencia después de terminar las solicitudes.
 El binario `kotavel` ya ofrece preparación del entorno Rust, descarga de
 dependencias, pruebas, compilación, ejecución, monitor y cierre. `prepare`
 comprueba `rustc`, Cargo y el manifiesto del workspace; `install` ejecuta
-`cargo fetch` para el proyecto seleccionado. `test --framework` valida el
-núcleo y el Laboratorio Rust local en una sola ejecución:
+`cargo fetch` para el proyecto seleccionado. `test --framework` ejecuta las
+pruebas de todos los crates del workspace Kotavel y después las del Laboratorio
+Rust local en una sola ejecución:
 
 ```sh
 cargo run --bin kotavel -- test
