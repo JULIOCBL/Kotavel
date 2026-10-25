@@ -49,6 +49,12 @@ jobs:
           target: desktop
           arch: ${{ matrix.qt-arch }}
           cache: true
+      - name: Configure Qt framework runtime lookup
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          test -d "$QT_ROOT_DIR/lib/QtQuick.framework"
+          echo "DYLD_FRAMEWORK_PATH=$QT_ROOT_DIR/lib" >> "$GITHUB_ENV"
       - name: Check Rust formatting
         run: cargo fmt --manifest-path Cargo.toml --all -- --check
       - name: Test Qt desktop integration
