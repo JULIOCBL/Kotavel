@@ -1,5 +1,0 @@
-# SQLite documents these two WAL-index routines as intentional TSan false positives.
-# walIndexTryHdr reads redundant headers concurrently and validates both copies plus a checksum.
-# walIndexWriteHdr updates those copies under SQLite's cross-process WAL lock.
-race:walIndexTryHdr
-race:walIndexWriteHdr

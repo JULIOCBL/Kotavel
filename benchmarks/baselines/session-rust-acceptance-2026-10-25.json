@@ -1,0 +1,738 @@
+{
+  "description": "Repeated Rust Kotavel session benchmark; each run verifies durable writes.",
+  "timestamp_utc": "2026-10-25T00:16:48.862796+00:00",
+  "system": "Darwin-25.3.0-arm64",
+  "build": "Release macOS ARM64",
+  "executable": "/Users/jcbl/Archivos/GitHub/test/Kotavel/target/release/kotavel-session-benchmark",
+  "configuration": {
+    "clients": 500,
+    "seconds": 5,
+    "repeats": 3,
+    "offered_rps": 1000,
+    "write_fraction": 0.2,
+    "batch_window_us": 0,
+    "workloads": [
+      "independent",
+      "shared",
+      "shared-keys"
+    ]
+  },
+  "source_sha256": "a78148f8039ae87751c04f28c3e4a0ee66c005ec9bb86d155403ec8f2548ffba",
+  "hashed_sources": [
+    "src/session/cache.rs",
+    "src/session/manager.rs",
+    "src/session/sqlite.rs",
+    "src/bin/kotavel-session-benchmark.rs",
+    "src/metrics/native.rs",
+    "src/metrics/mod.rs"
+  ],
+  "runs": [
+    {
+      "backend": "sqlite",
+      "workload": "independent",
+      "clients": 500.0,
+      "sessions": 500.0,
+      "offered_rps": 1000.0,
+      "requests": 5000.0,
+      "writes_committed": 1000.0,
+      "conflicts": 0.0,
+      "failures": 0.0,
+      "elapsed_s": 5.008094,
+      "p50_ms": 0.007416,
+      "p95_ms": 0.299333,
+      "p99_ms": 0.424625,
+      "write_p50_ms": 0.240208,
+      "write_p95_ms": 0.423167,
+      "write_p99_ms": 0.635125,
+      "throughput_rps": 998.38,
+      "cache_hits": 5496.0,
+      "cache_misses": 4.0,
+      "cache_hit_rate_pct": 99.93,
+      "cache_lock_contended": 1.0,
+      "cache_lock_wait_total_ms": 0.001083,
+      "cache_lock_wait_mean_ms": 0.001083,
+      "cache_lock_wait_max_ms": 0.001083,
+      "resident_sessions": 500.0,
+      "resident_bytes": 102000.0,
+      "writer_jobs": 1500.0,
+      "writer_queue_mean_ms": 0.028029,
+      "writer_queue_max_ms": 1.336125,
+      "writer_service_total_ms": 194.191632,
+      "writer_service_max_ms": 1.313916,
+      "writer_outstanding": 0.0,
+      "writer_peak_outstanding": 3.0,
+      "write_batches": 1500.0,
+      "batched_write_jobs": 1500.0,
+      "mean_batch_size": 1.0,
+      "max_batch_size": 1.0,
+      "process_cpu_mean_pct": 7.47,
+      "process_cpu_peak_pct": 16.16,
+      "process_metric_samples": 48.0,
+      "process_peak_rss_bytes": 13828096.0,
+      "cache_verified": "true",
+      "durable_verified": "true",
+      "repeat": 1
+    },
+    {
+      "backend": "sqlite",
+      "workload": "independent",
+      "clients": 500.0,
+      "sessions": 500.0,
+      "offered_rps": 1000.0,
+      "requests": 5000.0,
+      "writes_committed": 1000.0,
+      "conflicts": 0.0,
+      "failures": 0.0,
+      "elapsed_s": 5.009094,
+      "p50_ms": 0.0075,
+      "p95_ms": 0.31425,
+      "p99_ms": 0.448875,
+      "write_p50_ms": 0.269667,
+      "write_p95_ms": 0.441834,
+      "write_p99_ms": 0.552541,
+      "throughput_rps": 998.18,
+      "cache_hits": 5496.0,
+      "cache_misses": 4.0,
+      "cache_hit_rate_pct": 99.93,
+      "cache_lock_contended": 1.0,
+      "cache_lock_wait_total_ms": 0.001916,
+      "cache_lock_wait_mean_ms": 0.001916,
+      "cache_lock_wait_max_ms": 0.001916,
+      "resident_sessions": 500.0,
+      "resident_bytes": 102000.0,
+      "writer_jobs": 1500.0,
+      "writer_queue_mean_ms": 0.026782,
+      "writer_queue_max_ms": 0.398417,
+      "writer_service_total_ms": 213.433281,
+      "writer_service_max_ms": 1.651292,
+      "writer_outstanding": 0.0,
+      "writer_peak_outstanding": 3.0,
+      "write_batches": 1500.0,
+      "batched_write_jobs": 1500.0,
+      "mean_batch_size": 1.0,
+      "max_batch_size": 1.0,
+      "process_cpu_mean_pct": 8.25,
+      "process_cpu_peak_pct": 17.13,
+      "process_metric_samples": 48.0,
+      "process_peak_rss_bytes": 13828096.0,
+      "cache_verified": "true",
+      "durable_verified": "true",
+      "repeat": 2
+    },
+    {
+      "backend": "sqlite",
+      "workload": "independent",
+      "clients": 500.0,
+      "sessions": 500.0,
+      "offered_rps": 1000.0,
+      "requests": 5000.0,
+      "writes_committed": 1000.0,
+      "conflicts": 0.0,
+      "failures": 0.0,
+      "elapsed_s": 5.008142,
+      "p50_ms": 0.007042,
+      "p95_ms": 0.301083,
+      "p99_ms": 0.436875,
+      "write_p50_ms": 0.247417,
+      "write_p95_ms": 0.435166,
+      "write_p99_ms": 0.611583,
+      "throughput_rps": 998.37,
+      "cache_hits": 5499.0,
+      "cache_misses": 1.0,
+      "cache_hit_rate_pct": 99.98,
+      "cache_lock_contended": 2.0,
+      "cache_lock_wait_total_ms": 0.002041,
+      "cache_lock_wait_mean_ms": 0.00102,
+      "cache_lock_wait_max_ms": 0.001625,
+      "resident_sessions": 500.0,
+      "resident_bytes": 102000.0,
+      "writer_jobs": 1500.0,
+      "writer_queue_mean_ms": 0.029305,
+      "writer_queue_max_ms": 0.484125,
+      "writer_service_total_ms": 196.569761,
+      "writer_service_max_ms": 1.744458,
+      "writer_outstanding": 0.0,
+      "writer_peak_outstanding": 3.0,
+      "write_batches": 1500.0,
+      "batched_write_jobs": 1500.0,
+      "mean_batch_size": 1.0,
+      "max_batch_size": 1.0,
+      "process_cpu_mean_pct": 7.71,
+      "process_cpu_peak_pct": 21.77,
+      "process_metric_samples": 48.0,
+      "process_peak_rss_bytes": 13762560.0,
+      "cache_verified": "true",
+      "durable_verified": "true",
+      "repeat": 3
+    },
+    {
+      "backend": "sqlite",
+      "workload": "shared",
+      "clients": 500.0,
+      "sessions": 1.0,
+      "offered_rps": 1000.0,
+      "requests": 5000.0,
+      "writes_committed": 1000.0,
+      "conflicts": 0.0,
+      "failures": 0.0,
+      "elapsed_s": 5.009103,
+      "p50_ms": 0.007875,
+      "p95_ms": 0.299708,
+      "p99_ms": 0.432209,
+      "write_p50_ms": 0.24825,
+      "write_p95_ms": 0.432209,
+      "write_p99_ms": 0.562167,
+      "throughput_rps": 998.18,
+      "cache_hits": 4451.0,
+      "cache_misses": 550.0,
+      "cache_hit_rate_pct": 89.0,
+      "cache_lock_contended": 78.0,
+      "cache_lock_wait_total_ms": 0.38221,
+      "cache_lock_wait_mean_ms": 0.0049,
+      "cache_lock_wait_max_ms": 0.07625,
+      "resident_sessions": 1.0,
+      "resident_bytes": 207.0,
+      "writer_jobs": 1001.0,
+      "writer_queue_mean_ms": 0.035692,
+      "writer_queue_max_ms": 1.422958,
+      "writer_service_total_ms": 184.109325,
+      "writer_service_max_ms": 1.726208,
+      "writer_outstanding": 0.0,
+      "writer_peak_outstanding": 3.0,
+      "write_batches": 1001.0,
+      "batched_write_jobs": 1001.0,
+      "mean_batch_size": 1.0,
+      "max_batch_size": 1.0,
+      "process_cpu_mean_pct": 8.59,
+      "process_cpu_peak_pct": 19.86,
+      "process_metric_samples": 47.0,
+      "process_peak_rss_bytes": 13271040.0,
+      "cache_verified": "true",
+      "durable_verified": "true",
+      "repeat": 1
+    },
+    {
+      "backend": "sqlite",
+      "workload": "shared",
+      "clients": 500.0,
+      "sessions": 1.0,
+      "offered_rps": 1000.0,
+      "requests": 5000.0,
+      "writes_committed": 1000.0,
+      "conflicts": 0.0,
+      "failures": 0.0,
+      "elapsed_s": 5.007078,
+      "p50_ms": 0.006792,
+      "p95_ms": 0.286584,
+      "p99_ms": 0.412792,
+      "write_p50_ms": 0.232166,
+      "write_p95_ms": 0.377583,
+      "write_p99_ms": 0.650416,
+      "throughput_rps": 998.59,
+      "cache_hits": 4502.0,
+      "cache_misses": 499.0,
+      "cache_hit_rate_pct": 90.02,
+      "cache_lock_contended": 88.0,
+      "cache_lock_wait_total_ms": 0.282661,
+      "cache_lock_wait_mean_ms": 0.003212,
+      "cache_lock_wait_max_ms": 0.055625,
+      "resident_sessions": 1.0,
+      "resident_bytes": 207.0,
+      "writer_jobs": 1001.0,
+      "writer_queue_mean_ms": 0.035024,
+      "writer_queue_max_ms": 1.125458,
+      "writer_service_total_ms": 180.730295,
+      "writer_service_max_ms": 15.487541,
+      "writer_outstanding": 0.0,
+      "writer_peak_outstanding": 3.0,
+      "write_batches": 1001.0,
+      "batched_write_jobs": 1001.0,
+      "mean_batch_size": 1.0,
+      "max_batch_size": 1.0,
+      "process_cpu_mean_pct": 7.79,
+      "process_cpu_peak_pct": 23.95,
+      "process_metric_samples": 47.0,
+      "process_peak_rss_bytes": 13271040.0,
+      "cache_verified": "true",
+      "durable_verified": "true",
+      "repeat": 2
+    },
+    {
+      "backend": "sqlite",
+      "workload": "shared",
+      "clients": 500.0,
+      "sessions": 1.0,
+      "offered_rps": 1000.0,
+      "requests": 5000.0,
+      "writes_committed": 1000.0,
+      "conflicts": 0.0,
+      "failures": 0.0,
+      "elapsed_s": 5.006089,
+      "p50_ms": 0.007583,
+      "p95_ms": 0.300542,
+      "p99_ms": 0.466375,
+      "write_p50_ms": 0.238458,
+      "write_p95_ms": 0.438041,
+      "write_p99_ms": 1.164167,
+      "throughput_rps": 998.78,
+      "cache_hits": 4461.0,
+      "cache_misses": 540.0,
+      "cache_hit_rate_pct": 89.2,
+      "cache_lock_contended": 87.0,
+      "cache_lock_wait_total_ms": 0.376999,
+      "cache_lock_wait_mean_ms": 0.004333,
+      "cache_lock_wait_max_ms": 0.16875,
+      "resident_sessions": 1.0,
+      "resident_bytes": 207.0,
+      "writer_jobs": 1001.0,
+      "writer_queue_mean_ms": 0.060831,
+      "writer_queue_max_ms": 9.430292,
+      "writer_service_total_ms": 202.432762,
+      "writer_service_max_ms": 9.410792,
+      "writer_outstanding": 0.0,
+      "writer_peak_outstanding": 3.0,
+      "write_batches": 1001.0,
+      "batched_write_jobs": 1001.0,
+      "mean_batch_size": 1.0,
+      "max_batch_size": 1.0,
+      "process_cpu_mean_pct": 8.33,
+      "process_cpu_peak_pct": 20.9,
+      "process_metric_samples": 47.0,
+      "process_peak_rss_bytes": 13320192.0,
+      "cache_verified": "true",
+      "durable_verified": "true",
+      "repeat": 3
+    },
+    {
+      "backend": "sqlite",
+      "workload": "shared-keys",
+      "clients": 500.0,
+      "sessions": 1.0,
+      "offered_rps": 1000.0,
+      "requests": 5000.0,
+      "writes_committed": 1000.0,
+      "conflicts": 0.0,
+      "failures": 0.0,
+      "elapsed_s": 5.00626,
+      "p50_ms": 0.116458,
+      "p95_ms": 0.884666,
+      "p99_ms": 1.526166,
+      "write_p50_ms": 0.668583,
+      "write_p95_ms": 1.351625,
+      "write_p99_ms": 2.063,
+      "throughput_rps": 998.75,
+      "cache_hits": 4457.0,
+      "cache_misses": 544.0,
+      "cache_hit_rate_pct": 89.12,
+      "cache_lock_contended": 94.0,
+      "cache_lock_wait_total_ms": 2.493622,
+      "cache_lock_wait_mean_ms": 0.026528,
+      "cache_lock_wait_max_ms": 0.128167,
+      "resident_sessions": 1.0,
+      "resident_bytes": 7594.0,
+      "writer_jobs": 1001.0,
+      "writer_queue_mean_ms": 0.04581,
+      "writer_queue_max_ms": 0.793916,
+      "writer_service_total_ms": 337.494544,
+      "writer_service_max_ms": 16.94375,
+      "writer_outstanding": 0.0,
+      "writer_peak_outstanding": 3.0,
+      "write_batches": 1001.0,
+      "batched_write_jobs": 1001.0,
+      "mean_batch_size": 1.0,
+      "max_batch_size": 1.0,
+      "process_cpu_mean_pct": 24.94,
+      "process_cpu_peak_pct": 37.53,
+      "process_metric_samples": 47.0,
+      "process_peak_rss_bytes": 17973248.0,
+      "cache_verified": "true",
+      "durable_verified": "true",
+      "repeat": 1
+    },
+    {
+      "backend": "sqlite",
+      "workload": "shared-keys",
+      "clients": 500.0,
+      "sessions": 1.0,
+      "offered_rps": 1000.0,
+      "requests": 5000.0,
+      "writes_committed": 1000.0,
+      "conflicts": 0.0,
+      "failures": 0.0,
+      "elapsed_s": 5.004193,
+      "p50_ms": 0.124709,
+      "p95_ms": 0.917083,
+      "p99_ms": 1.345334,
+      "write_p50_ms": 0.713625,
+      "write_p95_ms": 1.300709,
+      "write_p99_ms": 1.923958,
+      "throughput_rps": 999.16,
+      "cache_hits": 4473.0,
+      "cache_misses": 528.0,
+      "cache_hit_rate_pct": 89.44,
+      "cache_lock_contended": 69.0,
+      "cache_lock_wait_total_ms": 1.580707,
+      "cache_lock_wait_mean_ms": 0.022909,
+      "cache_lock_wait_max_ms": 0.090541,
+      "resident_sessions": 1.0,
+      "resident_bytes": 7594.0,
+      "writer_jobs": 1001.0,
+      "writer_queue_mean_ms": 0.044012,
+      "writer_queue_max_ms": 0.833166,
+      "writer_service_total_ms": 325.111367,
+      "writer_service_max_ms": 7.249708,
+      "writer_outstanding": 0.0,
+      "writer_peak_outstanding": 3.0,
+      "write_batches": 1001.0,
+      "batched_write_jobs": 1001.0,
+      "mean_batch_size": 1.0,
+      "max_batch_size": 1.0,
+      "process_cpu_mean_pct": 25.33,
+      "process_cpu_peak_pct": 44.93,
+      "process_metric_samples": 47.0,
+      "process_peak_rss_bytes": 17940480.0,
+      "cache_verified": "true",
+      "durable_verified": "true",
+      "repeat": 2
+    },
+    {
+      "backend": "sqlite",
+      "workload": "shared-keys",
+      "clients": 500.0,
+      "sessions": 1.0,
+      "offered_rps": 1000.0,
+      "requests": 5000.0,
+      "writes_committed": 1000.0,
+      "conflicts": 0.0,
+      "failures": 0.0,
+      "elapsed_s": 5.008141,
+      "p50_ms": 0.11925,
+      "p95_ms": 0.880792,
+      "p99_ms": 1.221208,
+      "write_p50_ms": 0.675541,
+      "write_p95_ms": 1.221208,
+      "write_p99_ms": 1.73475,
+      "throughput_rps": 998.37,
+      "cache_hits": 4501.0,
+      "cache_misses": 500.0,
+      "cache_hit_rate_pct": 90.0,
+      "cache_lock_contended": 115.0,
+      "cache_lock_wait_total_ms": 2.394205,
+      "cache_lock_wait_mean_ms": 0.020819,
+      "cache_lock_wait_max_ms": 0.101542,
+      "resident_sessions": 1.0,
+      "resident_bytes": 7594.0,
+      "writer_jobs": 1001.0,
+      "writer_queue_mean_ms": 0.045879,
+      "writer_queue_max_ms": 1.219708,
+      "writer_service_total_ms": 309.186538,
+      "writer_service_max_ms": 1.78575,
+      "writer_outstanding": 0.0,
+      "writer_peak_outstanding": 3.0,
+      "write_batches": 1001.0,
+      "batched_write_jobs": 1001.0,
+      "mean_batch_size": 1.0,
+      "max_batch_size": 1.0,
+      "process_cpu_mean_pct": 24.1,
+      "process_cpu_peak_pct": 38.35,
+      "process_metric_samples": 47.0,
+      "process_peak_rss_bytes": 17727488.0,
+      "cache_verified": "true",
+      "durable_verified": "true",
+      "repeat": 3
+    }
+  ],
+  "summary": {
+    "independent": {
+      "throughput_rps": {
+        "median": 998.37,
+        "min": 998.18,
+        "max": 998.38
+      },
+      "p50_ms": {
+        "median": 0.007416,
+        "min": 0.007042,
+        "max": 0.0075
+      },
+      "p95_ms": {
+        "median": 0.301083,
+        "min": 0.299333,
+        "max": 0.31425
+      },
+      "p99_ms": {
+        "median": 0.436875,
+        "min": 0.424625,
+        "max": 0.448875
+      },
+      "write_p95_ms": {
+        "median": 0.435166,
+        "min": 0.423167,
+        "max": 0.441834
+      },
+      "write_p99_ms": {
+        "median": 0.611583,
+        "min": 0.552541,
+        "max": 0.635125
+      },
+      "cache_hit_rate_pct": {
+        "median": 99.93,
+        "min": 99.93,
+        "max": 99.98
+      },
+      "cache_lock_contended": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 2.0
+      },
+      "cache_lock_wait_mean_ms": {
+        "median": 0.001083,
+        "min": 0.00102,
+        "max": 0.001916
+      },
+      "cache_lock_wait_max_ms": {
+        "median": 0.001625,
+        "min": 0.001083,
+        "max": 0.001916
+      },
+      "resident_bytes": {
+        "median": 102000.0,
+        "min": 102000.0,
+        "max": 102000.0
+      },
+      "writer_queue_max_ms": {
+        "median": 0.484125,
+        "min": 0.398417,
+        "max": 1.336125
+      },
+      "writer_service_max_ms": {
+        "median": 1.651292,
+        "min": 1.313916,
+        "max": 1.744458
+      },
+      "writer_peak_outstanding": {
+        "median": 3.0,
+        "min": 3.0,
+        "max": 3.0
+      },
+      "process_cpu_mean_pct": {
+        "median": 7.71,
+        "min": 7.47,
+        "max": 8.25
+      },
+      "process_cpu_peak_pct": {
+        "median": 17.13,
+        "min": 16.16,
+        "max": 21.77
+      },
+      "process_peak_rss_bytes": {
+        "median": 13828096.0,
+        "min": 13762560.0,
+        "max": 13828096.0
+      },
+      "conflicts": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "failures": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    },
+    "shared": {
+      "throughput_rps": {
+        "median": 998.59,
+        "min": 998.18,
+        "max": 998.78
+      },
+      "p50_ms": {
+        "median": 0.007583,
+        "min": 0.006792,
+        "max": 0.007875
+      },
+      "p95_ms": {
+        "median": 0.299708,
+        "min": 0.286584,
+        "max": 0.300542
+      },
+      "p99_ms": {
+        "median": 0.432209,
+        "min": 0.412792,
+        "max": 0.466375
+      },
+      "write_p95_ms": {
+        "median": 0.432209,
+        "min": 0.377583,
+        "max": 0.438041
+      },
+      "write_p99_ms": {
+        "median": 0.650416,
+        "min": 0.562167,
+        "max": 1.164167
+      },
+      "cache_hit_rate_pct": {
+        "median": 89.2,
+        "min": 89.0,
+        "max": 90.02
+      },
+      "cache_lock_contended": {
+        "median": 87.0,
+        "min": 78.0,
+        "max": 88.0
+      },
+      "cache_lock_wait_mean_ms": {
+        "median": 0.004333,
+        "min": 0.003212,
+        "max": 0.0049
+      },
+      "cache_lock_wait_max_ms": {
+        "median": 0.07625,
+        "min": 0.055625,
+        "max": 0.16875
+      },
+      "resident_bytes": {
+        "median": 207.0,
+        "min": 207.0,
+        "max": 207.0
+      },
+      "writer_queue_max_ms": {
+        "median": 1.422958,
+        "min": 1.125458,
+        "max": 9.430292
+      },
+      "writer_service_max_ms": {
+        "median": 9.410792,
+        "min": 1.726208,
+        "max": 15.487541
+      },
+      "writer_peak_outstanding": {
+        "median": 3.0,
+        "min": 3.0,
+        "max": 3.0
+      },
+      "process_cpu_mean_pct": {
+        "median": 8.33,
+        "min": 7.79,
+        "max": 8.59
+      },
+      "process_cpu_peak_pct": {
+        "median": 20.9,
+        "min": 19.86,
+        "max": 23.95
+      },
+      "process_peak_rss_bytes": {
+        "median": 13271040.0,
+        "min": 13271040.0,
+        "max": 13320192.0
+      },
+      "conflicts": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "failures": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    },
+    "shared-keys": {
+      "throughput_rps": {
+        "median": 998.75,
+        "min": 998.37,
+        "max": 999.16
+      },
+      "p50_ms": {
+        "median": 0.11925,
+        "min": 0.116458,
+        "max": 0.124709
+      },
+      "p95_ms": {
+        "median": 0.884666,
+        "min": 0.880792,
+        "max": 0.917083
+      },
+      "p99_ms": {
+        "median": 1.345334,
+        "min": 1.221208,
+        "max": 1.526166
+      },
+      "write_p95_ms": {
+        "median": 1.300709,
+        "min": 1.221208,
+        "max": 1.351625
+      },
+      "write_p99_ms": {
+        "median": 1.923958,
+        "min": 1.73475,
+        "max": 2.063
+      },
+      "cache_hit_rate_pct": {
+        "median": 89.44,
+        "min": 89.12,
+        "max": 90.0
+      },
+      "cache_lock_contended": {
+        "median": 94.0,
+        "min": 69.0,
+        "max": 115.0
+      },
+      "cache_lock_wait_mean_ms": {
+        "median": 0.022909,
+        "min": 0.020819,
+        "max": 0.026528
+      },
+      "cache_lock_wait_max_ms": {
+        "median": 0.101542,
+        "min": 0.090541,
+        "max": 0.128167
+      },
+      "resident_bytes": {
+        "median": 7594.0,
+        "min": 7594.0,
+        "max": 7594.0
+      },
+      "writer_queue_max_ms": {
+        "median": 0.833166,
+        "min": 0.793916,
+        "max": 1.219708
+      },
+      "writer_service_max_ms": {
+        "median": 7.249708,
+        "min": 1.78575,
+        "max": 16.94375
+      },
+      "writer_peak_outstanding": {
+        "median": 3.0,
+        "min": 3.0,
+        "max": 3.0
+      },
+      "process_cpu_mean_pct": {
+        "median": 24.94,
+        "min": 24.1,
+        "max": 25.33
+      },
+      "process_cpu_peak_pct": {
+        "median": 38.35,
+        "min": 37.53,
+        "max": 44.93
+      },
+      "process_peak_rss_bytes": {
+        "median": 17940480.0,
+        "min": 17727488.0,
+        "max": 17973248.0
+      },
+      "conflicts": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "failures": {
+        "median": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    }
+  }
+}

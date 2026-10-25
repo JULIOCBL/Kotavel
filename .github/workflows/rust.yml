@@ -1,0 +1,57 @@
+name: Rust core validation
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install Rust validation components
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      - name: Check formatting
+        run: cargo fmt --manifest-path Cargo.toml --all -- --check
+      - name: Run Rust workspace tests
+        run: cargo test --manifest-path Cargo.toml --workspace
+      - name: Run Clippy
+        run: cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings
+
+  desktop-qt:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            qt-arch: linux_gcc_64
+          - os: macos-latest
+            qt-arch: clang_64
+          - os: windows-latest
+            qt-arch: win64_msvc2022_64
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install Rust validation components
+        run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v4.3.1
+        with:
+          version: '6.8.3'
+          target: desktop
+          arch: ${{ matrix.qt-arch }}
+          cache: true
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path Cargo.toml --all -- --check
+      - name: Test Qt desktop integration
+        run: cargo test --manifest-path Cargo.toml --workspace --features desktop-qt
+      - name: Run Clippy with Qt
+        run: cargo clippy --manifest-path Cargo.toml --workspace --all-targets --features desktop-qt -- -D warnings
