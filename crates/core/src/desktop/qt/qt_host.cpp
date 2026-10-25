@@ -1,3 +1,7 @@
+#if defined(__arm__) || defined(__aarch64__) || defined(__arm64__)
+#include <arm_acle.h>
+#endif
+
 #include "core/src/desktop/qt/bridge.cxx.h"
 #include "core/src/desktop/qt/qt_host.h"
 
