@@ -161,15 +161,9 @@ mod tests {
     }
 
     fn block_on<F: Future>(future: F) -> F::Output {
-        use std::task::{Context, Poll, Wake, Waker};
+        use std::task::{Context, Poll, Waker};
 
-        struct NoopWake;
-        impl Wake for NoopWake {
-            fn wake(self: Arc<Self>) {}
-        }
-
-        let waker = Waker::from(Arc::new(NoopWake));
-        let mut context = Context::from_waker(&waker);
+        let mut context = Context::from_waker(Waker::noop());
         let mut future = Box::pin(future);
         match future.as_mut().poll(&mut context) {
             Poll::Ready(result) => result,
