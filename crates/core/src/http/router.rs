@@ -265,9 +265,6 @@ impl<'a> Route<'a> {
     pub fn delete(&mut self, path: &str, handler: Handler) -> Result<&mut Self, RouterError> {
         self.add(Method::Delete, path, handler)
     }
-    pub fn remove(&mut self, path: &str, handler: Handler) -> Result<&mut Self, RouterError> {
-        self.delete(path, handler)
-    }
 
     pub fn name(&mut self, name: &str) -> Result<&mut Self, RouterError> {
         let index = self
@@ -378,7 +375,7 @@ mod tests {
     }
 
     #[test]
-    fn laravel_style_facade_registers_named_web_and_delete_routes() {
+    fn route_builder_registers_named_web_get_and_api_delete_routes() {
         let mut router = Router::new();
         Route::web(&mut router)
             .get("/dashboard", handler())
@@ -397,6 +394,20 @@ mod tests {
             "/api/items/{id}"
         );
         assert_eq!(router.routes()[1].method, Method::Delete);
+    }
+
+    #[test]
+    fn direct_router_api_registers_delete_routes() {
+        let mut router = Router::new();
+        router.api_delete("/items/{id}", handler()).unwrap();
+        router.web_delete("/resources/{id}", handler()).unwrap();
+
+        assert_eq!(router.routes()[0].kind, RouteKind::Api);
+        assert_eq!(router.routes()[0].method, Method::Delete);
+        assert_eq!(router.routes()[0].path, "/api/items/{id}");
+        assert_eq!(router.routes()[1].kind, RouteKind::Web);
+        assert_eq!(router.routes()[1].method, Method::Delete);
+        assert_eq!(router.routes()[1].path, "/resources/{id}");
     }
 
     #[test]
