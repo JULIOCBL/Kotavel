@@ -1,0 +1,12 @@
+use crate::{
+    metrics::ProcessMetricsProvider, runtime_paths::RuntimePathResolver, system_paths::SystemPaths,
+};
+use std::sync::Arc;
+
+/// Shared native services registered by the application container.
+#[derive(Clone)]
+pub struct PlatformServices {
+    pub process_metrics: Arc<dyn ProcessMetricsProvider>,
+    pub system_paths: Arc<dyn SystemPaths>,
+    pub runtime_paths: Arc<dyn RuntimePathResolver>,
+}

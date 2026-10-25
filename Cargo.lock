@@ -138,6 +138,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "cxx",
+ "cxx-qt-build",
+ "encoding_rs",
+ "fs2",
+ "getrandom 0.3.4",
+ "libc",
+ "regex",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tempfile",
+ "url",
+ "windows-sys",
+]
+
+[[package]]
 name = "cxx"
 version = "1.0.198"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -514,28 +536,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kotavel"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "chrono-tz",
- "cxx",
- "cxx-qt-build",
- "encoding_rs",
- "fs2",
- "getrandom 0.3.4",
- "libc",
- "regex",
- "rusqlite",
- "serde",
- "serde_json",
- "sysinfo",
- "tempfile",
- "url",
- "windows-sys",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -651,6 +651,13 @@ name = "pkg-config"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
+
+[[package]]
+name = "platform"
+version = "0.1.0"
+dependencies = [
+ "core",
+]
 
 [[package]]
 name = "potential_utf"

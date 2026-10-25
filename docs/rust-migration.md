@@ -1,5 +1,9 @@
 # Migración de Kotavel a Rust
 
+El árbol vigente del crate y sus reglas de organización están documentados en
+el [blueprint de estructura Rust](blueprint/estructura.md). El blueprint
+propuesto original conserva el diseño histórico C++.
+
 La raíz del repositorio contiene el núcleo implementado en Rust.
 Las fuentes C++ originales se retiraron; la documentación histórica se conserva.
 
@@ -203,7 +207,7 @@ CSV también registra el número de muestras. Para medir la ruta HTTP completa s
 debe usar el adaptador de Laboratory y una herramienta de carga de red.
 
 La referencia de tres repeticiones para macOS ARM64 está en
-[`benchmarks/baselines/session-rust-acceptance-2026-10-25.json`](benchmarks/baselines/session-rust-acceptance-2026-10-25.json).
+[`benchmarks/baselines/session-rust-acceptance-2026-10-25.json`](../benchmarks/baselines/session-rust-acceptance-2026-10-25.json).
 Las nueve corridas completaron 5.000 solicitudes y 1.000 escrituras cada una;
 cache y SQLite confirmaron todos los contadores, sin conflictos ni fallos. La
 mediana observada fue 998,37–998,75 solicitudes/s y p95 de 0,300 ms para sesiones

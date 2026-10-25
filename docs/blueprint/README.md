@@ -1,5 +1,11 @@
 # Blueprint propuesto de Kotavel
 
+> Este documento conserva la propuesta histórica del núcleo C++. La
+> arquitectura objetivo de Rust está descrita en el
+> [blueprint de estructura](estructura.md). La migración Rust está en curso:
+> `crates/core` ya existe, mientras que los crates `platform` y `cli` siguen
+> pendientes.
+
 **Kotavel puede combinar la facilidad de desarrollo de Laravel con un runtime eficiente en C++.** Para conseguirlo, debemos diseñar primero una base que permita añadir capacidades sin rehacer el framework. El rendimiento es una prioridad de diseño y debe demostrarse con mediciones reproducibles, junto con corrección y estabilidad.
 
 Este documento describe la arquitectura objetivo. Existe una primera implementación estática de `Kotavel::Core` con ciclo de vida síncrono, diagnóstico con ubicación/trazas, presentación por entorno y un contenedor explícito de servicios con providers. Las rutas API/web, middleware, deep links y un ciclo inicial desktop ya tienen implementación; el adaptador HTTP Drogon y el adaptador Qt Quick son opcionales. Consulta [Uso del núcleo](../core.md), [Contenedor de servicios](../container.md), [Rutas HTTP y deep links](../http.md) y [Aplicaciones de escritorio](../desktop.md). Persistencia sigue reservada. La asociación de deep links con el ejecutable y el control reiniciable de servicios desde desktop quedan pendientes. La implementación HTTP requiere validación nativa en Windows y Linux, pruebas de concurrencia y mediciones representativas antes de considerarse lista para producción. Cada `.cpp` se incorpora explícitamente a su target CMake.

@@ -1,0 +1,69 @@
+[package]
+name = "core"
+description = "Multiplatform application framework nucleus"
+default-run = "kotavel"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "framework_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "kotavel"
+path = "src/bin/kotavel.rs"
+
+[[bin]]
+name = "kotavel-monitor"
+path = "src/bin/kotavel-monitor.rs"
+
+[[bin]]
+name = "kotavel-session-benchmark"
+path = "src/bin/kotavel-session-benchmark.rs"
+
+[[bin]]
+name = "kotavel-stop"
+path = "src/bin/kotavel-stop.rs"
+
+[dependencies]
+cxx = { workspace = true, optional = true }
+fs2.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+encoding_rs.workspace = true
+getrandom.workspace = true
+regex.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+url.workspace = true
+sysinfo.workspace = true
+
+[features]
+default = []
+desktop-qt = ["dep:cxx"]
+
+[build-dependencies]
+cxx-qt-build.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
+    "Win32_Networking_WinSock",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Memory",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Threading",
+    "Win32_System_Console",
+    "Win32_UI_WindowsAndMessaging",
+] }

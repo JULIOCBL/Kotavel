@@ -1,0 +1,14 @@
+[package]
+name = "platform"
+description = "Native platform adapters for Kotavel"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "framework_platform"
+path = "src/lib.rs"
+
+[dependencies]
+framework-core.workspace = true

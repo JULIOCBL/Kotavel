@@ -1,5 +1,13 @@
 # Kotavel
 
+La implementación vigente del núcleo está en **Rust**. Consulta el
+[blueprint de estructura](docs/blueprint/estructura.md) para el árbol actual y
+la [guía de migración](docs/rust-migration.md) para módulos y comandos. El
+[blueprint propuesto original](docs/blueprint/README.md) y las instrucciones
+C++ que siguen se conservan como referencia histórica.
+
+Desde la raíz, ejecuta `cargo kotavel` para ver los comandos disponibles.
+
 Los comandos de esta guía y de `docs/` conservan el mismo nombre en los tres
 sistemas: `python3 kotavel.py ...`. Si Windows no reconoce `python3`, configura
 PowerShell como se indica en el README del Laboratorio.
