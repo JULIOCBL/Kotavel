@@ -2,8 +2,13 @@ use super::{
     ApiResponse, Middleware, Request, Response, RouteDefinition, RouteKind, Router, RouterError,
     Server, ServerError, ServerSettings, ServerStartedCallback,
 };
+use chrono::{DateTime, SecondsFormat, Utc};
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::Arc;
+use std::{
+    io::Write,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 pub type ExceptionReporter = dyn Fn(&RouteDefinition, &Request, &str) + Send + Sync + 'static;
 
@@ -134,6 +139,19 @@ impl HttpKernel {
         self.started
     }
 
+    /// Prints one access-log line for a completed HTTP transport request.
+    pub fn log_access(
+        method: &str,
+        path: &str,
+        status: u16,
+        received_at: SystemTime,
+        elapsed: Duration,
+    ) {
+        let line = format_access_log(method, path, status, received_at, elapsed);
+        let stdout = std::io::stdout();
+        let _ = writeln!(stdout.lock(), "{line}");
+    }
+
     /// Seals configuration and transfers an immutable kernel snapshot to the
     /// selected transport. A kernel instance can only be started once.
     pub async fn run(
@@ -240,6 +258,27 @@ impl HttpKernel {
             Ok(())
         }
     }
+}
+
+fn format_access_log(
+    method: &str,
+    path: &str,
+    status: u16,
+    received_at: SystemTime,
+    elapsed: Duration,
+) -> String {
+    let timestamp = DateTime::<Utc>::from(received_at).to_rfc3339_opts(SecondsFormat::Millis, true);
+    let printable_path: String = path
+        .chars()
+        .map(|character| match character {
+            '\r' | '\n' | '\t' => ' ',
+            other => other,
+        })
+        .collect();
+    format!(
+        "[HTTP] {timestamp} {method} {printable_path} {status} {:.3} ms",
+        elapsed.as_secs_f64() * 1_000.0
+    )
 }
 
 fn invoke_chain(
@@ -381,153 +420,5 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::super::Handler;
-    use super::*;
-    use std::sync::{Arc, Mutex};
-
-    fn request(kind: RouteKind, accept: &str, raw_method: &str, body: &[u8]) -> Request {
-        let mut headers = std::collections::BTreeMap::new();
-        if !accept.is_empty() {
-            headers.insert("Accept".into(), accept.into());
-        }
-        if !body.is_empty() {
-            headers.insert("Content-Type".into(), "application/json".into());
-        }
-        Request::new(super::super::RequestData {
-            kind,
-            path: if kind == RouteKind::Api {
-                "/api/test".into()
-            } else {
-                "/".into()
-            },
-            raw_method: raw_method.into(),
-            body: body.to_vec(),
-            headers,
-            ..Default::default()
-        })
-    }
-    fn handler<F>(handler: F) -> Handler
-    where
-        F: Fn(&Request) -> Response + Send + Sync + 'static,
-    {
-        Arc::new(handler)
-    }
-    fn pass<F>(middleware: F) -> Middleware
-    where
-        F: for<'a> Fn(&Request, &super::super::Next<'a>) -> Response + Send + Sync + 'static,
-    {
-        Arc::new(middleware)
-    }
-
-    #[test]
-    fn media_negotiation_honors_specific_exclusions_before_middleware() {
-        let mut kernel = HttpKernel::new();
-        let calls = Arc::new(Mutex::new(0));
-        let tracked = Arc::clone(&calls);
-        kernel
-            .use_api(pass(move |_, next| {
-                *tracked.lock().unwrap() += 1;
-                next()
-            }))
-            .unwrap();
-        let routes = kernel.routes_mut().unwrap();
-        routes
-            .api_get("/items", handler(|_| Response::default()))
-            .unwrap();
-        let route = routes.routes()[0].clone();
-        let response = kernel.handle(
-            &route,
-            &request(RouteKind::Api, "application/json;q=0, */*;q=1", "GET", b""),
-        );
-        assert_eq!(response.status, 406);
-        assert_eq!(*calls.lock().unwrap(), 0);
-    }
-
-    #[test]
-    fn middleware_runs_in_order_and_can_short_circuit() {
-        let mut kernel = HttpKernel::new();
-        let events = Arc::new(Mutex::new(Vec::new()));
-        for name in ["global", "group"] {
-            let events = Arc::clone(&events);
-            let middleware = pass(move |_, next| {
-                events.lock().unwrap().push(format!("{name}:in"));
-                let response = next();
-                events.lock().unwrap().push(format!("{name}:out"));
-                response
-            });
-            if name == "global" {
-                kernel.use_global(middleware).unwrap();
-            } else {
-                kernel.use_api(middleware).unwrap();
-            }
-        }
-        let events_handler = Arc::clone(&events);
-        let route_middleware = pass(move |_, next| {
-            events_handler.lock().unwrap().push("route:in".into());
-            let response = next();
-            events_handler.lock().unwrap().push("route:out".into());
-            response
-        });
-        kernel
-            .routes_mut()
-            .unwrap()
-            .api()
-            .middleware(route_middleware)
-            .unwrap()
-            .get(
-                "/items",
-                handler({
-                    let events = Arc::clone(&events);
-                    move |_| {
-                        events.lock().unwrap().push("handler".into());
-                        Response::default()
-                    }
-                }),
-            )
-            .unwrap();
-        let route = kernel.routes().routes().first().unwrap().clone();
-        let response = kernel.handle(&route, &request(RouteKind::Api, "", "GET", b""));
-        assert_eq!(response.status, 200);
-        assert_eq!(
-            *events.lock().unwrap(),
-            [
-                "global:in",
-                "group:in",
-                "route:in",
-                "handler",
-                "route:out",
-                "group:out",
-                "global:out"
-            ]
-        );
-    }
-
-    #[test]
-    fn errors_and_panics_are_converted_to_safe_responses() {
-        let mut kernel = HttpKernel::new();
-        let routes = kernel.routes_mut().unwrap();
-        routes
-            .api_get("/panic", handler(|_| panic!("secret internal detail")))
-            .unwrap();
-        let route = routes.routes()[0].clone();
-        let response = kernel.handle(
-            &route,
-            &request(RouteKind::Api, "application/json", "GET", b""),
-        );
-        assert_eq!(response.status, 500);
-        assert!(!String::from_utf8_lossy(&response.body).contains("secret internal detail"));
-        assert_eq!(
-            kernel
-                .not_found(&request(RouteKind::Api, "application/json", "GET", b""))
-                .status,
-            404
-        );
-        assert_eq!(
-            kernel
-                .method_not_allowed(&request(RouteKind::Web, "text/html", "OPTIONS", b""))
-                .status,
-            403
-        );
-    }
-}
+#[path = "../../tests/unit/http/kernel.rs"]
+mod tests;

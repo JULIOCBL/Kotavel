@@ -41,7 +41,10 @@ fn console_settings_apply_channels_paths_and_metrics_ranges() {
         ])
         .unwrap();
     let settings = console_settings("/project", &config).unwrap();
-    assert!(settings.logs.enabled && !settings.logs.file && settings.logs.console);
+    assert_eq!(
+        settings.logs.channel,
+        crate::diagnostics::LogChannel::Stderr
+    );
     assert_eq!(
         settings.logs.min_level,
         crate::diagnostics::LogLevel::Warning
@@ -55,7 +58,10 @@ fn console_settings_apply_channels_paths_and_metrics_ranges() {
 #[test]
 fn console_settings_reject_invalid_values_and_keep_missing_defaults() {
     let settings = console_settings("/project", &Config::new()).unwrap();
-    assert!(settings.logs.enabled && settings.logs.file && !settings.logs.console);
+    assert_eq!(
+        settings.logs.channel,
+        crate::diagnostics::LogChannel::Single
+    );
     assert!(!settings.metrics.enabled);
 
     let mut config = Config::new();

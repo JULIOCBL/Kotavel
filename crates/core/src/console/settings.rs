@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, ConfigValue},
-    diagnostics::{Environment, LogLevel, LogOptions},
+    diagnostics::{Environment, LogChannel, LogLevel, LogOptions},
     foundation::ErrorHandlingOptions,
     metrics::MetricsOptions,
 };
@@ -46,13 +46,11 @@ pub fn console_settings(
     configuration: &Config,
 ) -> Result<ConsoleSettings, ConsoleSettingsError> {
     let root = root.as_ref();
-    let channel = read_string(configuration, "logging.channel", "single")?;
-    if !matches!(channel.as_str(), "single" | "stderr" | "null") {
-        return Err(ConsoleSettingsError::new(
-            "logging.channel",
-            "use single, stderr or null",
-        ));
-    }
+    let channel = read_string(configuration, "logging.channel", "single")?
+        .parse::<LogChannel>()
+        .map_err(|_| {
+            ConsoleSettingsError::new("logging.channel", "use single, stderr, stack or null")
+        })?;
     let level_name = read_string(configuration, "logging.level", "info")?;
     let min_level = LogLevel::ALL
         .into_iter()
@@ -93,9 +91,7 @@ pub fn console_settings(
     }
 
     let logs = LogOptions {
-        enabled: channel != "null",
-        file: channel == "single",
-        console: channel == "stderr",
+        channel,
         min_level,
         module,
         directory: root.join(directory),

@@ -1,5 +1,5 @@
 use super::*;
-use crate::diagnostics::{ContextField, ReportStatus};
+use crate::diagnostics::{ContextField, LogChannel, ReportStatus};
 use std::{
     fs,
     sync::{
@@ -11,6 +11,95 @@ use std::{
 };
 
 static NEXT_DIR: AtomicU64 = AtomicU64::new(0);
+
+#[test]
+fn log_channel_enum_documents_and_selects_output_destinations() {
+    for (name, file, console, enabled) in [
+        ("single", true, false, true),
+        ("stderr", false, true, true),
+        ("stack", true, true, true),
+        ("null", false, false, false),
+    ] {
+        let options = LogOptions::configured(
+            std::env::temp_dir().join("kotavel-channel-config"),
+            "logs".into(),
+            512 * 1024 * 1024,
+            3,
+            name.into(),
+            "trace".into(),
+            "app".into(),
+        )
+        .unwrap();
+
+        assert_eq!(options.channel.writes_file(), file, "channel {name}");
+        assert_eq!(options.channel.writes_console(), console, "channel {name}");
+        assert_eq!(options.channel.is_enabled(), enabled, "channel {name}");
+    }
+}
+
+#[test]
+fn log_directory_is_resolved_inside_project_storage() {
+    let project_root =
+        std::env::temp_dir().join(format!("kotavel-log-directory-{}", std::process::id()));
+    let options = LogOptions::configured(
+        project_root.clone(),
+        "logs".into(),
+        512 * 1024 * 1024,
+        3,
+        "single".into(),
+        "trace".into(),
+        "app".into(),
+    )
+    .unwrap();
+
+    assert_eq!(options.directory, project_root.join("storage/logs"));
+}
+
+#[test]
+fn log_directory_rejects_paths_that_can_escape_storage() {
+    for directory in ["", "../outside", "logs/../../outside", "/tmp/outside"] {
+        let result = LogOptions::configured(
+            std::env::temp_dir().join("kotavel-invalid-log-directory"),
+            directory.into(),
+            512 * 1024 * 1024,
+            3,
+            "single".into(),
+            "trace".into(),
+            "app".into(),
+        );
+
+        assert!(
+            result.is_err(),
+            "accepted unsafe log directory {directory:?}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn log_directory_rejects_symlinks_that_escape_storage() {
+    let project = TestDirectory::new();
+    let storage = project.0.join("storage");
+    let outside = project.0.join("outside");
+    fs::create_dir_all(&storage).unwrap();
+    fs::create_dir(&outside).unwrap();
+    std::os::unix::fs::symlink(&outside, storage.join("logs")).unwrap();
+
+    let result = LogOptions::configured(
+        project.0.clone(),
+        "logs".into(),
+        512 * 1024 * 1024,
+        3,
+        "single".into(),
+        "trace".into(),
+        "app".into(),
+    );
+
+    assert!(
+        result.is_err(),
+        "accepted a log symlink that escapes storage"
+    );
+}
 
 struct TestDirectory(std::path::PathBuf);
 impl TestDirectory {
@@ -24,7 +113,7 @@ impl TestDirectory {
     fn options(&self) -> LogOptions {
         LogOptions {
             directory: self.0.clone(),
-            console: false,
+            channel: LogChannel::Single,
             max_bytes: 16 * 1024,
             ..LogOptions::default()
         }
@@ -185,9 +274,7 @@ fn rotation_retains_only_configured_backups_and_caps_file_size() {
 #[test]
 fn disabled_logger_needs_no_directory_and_counts_filtered_records() {
     let logger = Logger::new(LogOptions {
-        enabled: false,
-        file: false,
-        console: false,
+        channel: LogChannel::Null,
         ..LogOptions::default()
     })
     .unwrap();

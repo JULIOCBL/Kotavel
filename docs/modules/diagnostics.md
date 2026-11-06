@@ -33,3 +33,16 @@ contexto y captura fallos sin propagar panic. `BootstrapLogger` escribe avisos
 mínimos cuando falla la configuración normal. Logging remoto y captura fatal
 del sistema devuelven `FeatureStatus`: son capacidades pendientes, no se deben
 presentar como activas.
+
+`LogChannel` define los canales permitidos en el núcleo. La configuración usa
+una sola opción, `LOG_CHANNEL`, que se convierte al enum `LogChannel`:
+
+| Valor | Destino |
+| --- | --- |
+| `single` | Archivo rotativo `kotavel.log` |
+| `stderr` | Consola (standard error) |
+| `stack` | Archivo y consola |
+| `null` | Logger desactivado |
+
+Los valores se convierten con `"stack".parse::<LogChannel>()?`; un canal
+desconocido produce error de configuración.

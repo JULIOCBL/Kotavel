@@ -18,4 +18,5 @@ pub use crate::session::SessionStore;
 pub use crate::system_paths::SystemPaths;
 
 #[cfg(test)]
+#[path = "../../tests/unit/contracts/mod.rs"]
 mod tests;

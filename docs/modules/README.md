@@ -15,6 +15,7 @@ entorno, contenedor y providers, después los módulos de aplicación.
 | [env](env.md) | Variables y archivos de entorno |
 | [filesystem](filesystem.md) | Almacenamiento local y operaciones seguras |
 | [foundation](foundation.md) | Ciclo de vida y recuperación |
+| [helpers](helpers.md) | Macros y utilidades comunes del núcleo |
 | [http](http.md) | Kernel HTTP independiente del transporte |
 | [metrics](metrics.md) | Muestras y monitor de proceso |
 | [network](network.md) | Direcciones de red |

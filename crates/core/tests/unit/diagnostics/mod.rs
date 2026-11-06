@@ -7,7 +7,11 @@ fn diagnostic_captures_caller_context_and_enforces_codes() {
     let error = DiagnosticError::new("database.unavailable", "private reason").unwrap();
     let location = error.context().location.unwrap();
     assert_eq!(location.line(), expected_line);
-    assert!(location.file_name().ends_with("diagnostics/tests.rs"));
+    assert!(
+        location
+            .file_name()
+            .ends_with("tests/unit/diagnostics/mod.rs")
+    );
     assert_eq!(error.context().origin, TraceOrigin::ExceptionConstruction);
     assert!(DiagnosticError::new("", "invalid").is_err());
     assert!(DiagnosticError::new("x".repeat(513), "invalid").is_err());
@@ -79,11 +83,11 @@ fn production_error_presentation_hides_internal_details() {
     assert!(production.detail.is_empty());
     let visible = production.console_text();
     assert!(!visible.contains("hunter2"));
-    assert!(!visible.contains("diagnostics/tests.rs"));
+    assert!(!visible.contains("tests/unit/diagnostics/mod.rs"));
 
     let development = render_error(&details, Environment::Development, None);
     assert!(development.detail.contains("password=hunter2"));
-    assert!(development.detail.contains("diagnostics/tests.rs"));
+    assert!(development.detail.contains("tests/unit/diagnostics/mod.rs"));
 }
 
 #[test]

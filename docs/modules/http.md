@@ -87,9 +87,12 @@ añadir headers; el adaptador HTTP los transfiere al transporte.
 `HttpKernel` expone `new`, `routes/routes_mut`, `use_global`, `use_api`,
 `use_web`, `alias_middleware`, `configure_middleware`,
 `set_exception_reporter`, `seal/started`, `handle`, `not_found`,
-`method_not_allowed`, `run` y `stop`. Antes de arrancar se pueden configurar
-rutas y middleware. `run` valida `ServerSettings`, sella el kernel y entrega
-una instantánea inmutable al servidor.
+`method_not_allowed`, `log_access`, `run` y `stop`. `HttpKernel::log_access`
+imprime una
+línea `[HTTP]` a stdout con fecha UTC, método, ruta, estado y duración. Antes
+de arrancar se pueden configurar rutas y middleware. `run` valida
+`ServerSettings`, sella el kernel y entrega una instantánea inmutable al
+servidor.
 
 `ServerSettings::validate()` y `socket_address()` verifican host, puerto y
 resolución. Un adaptador implementa `Server::run(kernel, settings, started)` y

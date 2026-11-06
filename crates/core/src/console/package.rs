@@ -72,7 +72,7 @@ fn package_macos(project: &Path, manifest: &Path, arguments: &[OsString]) -> Res
     let environment_values = FileEnvironment::load(&project, environment)
         .map_err(|error| format!("no se pudo leer APP_SCHEME del entorno: {error}"))?;
     let scheme = Env::new(&environment_values)
-        .string("APP_SCHEME", "kotavel")
+        .try_string("APP_SCHEME", "kotavel")
         .map_err(|error| format!("APP_SCHEME no es válido: {error}"))?;
     if !valid_url_scheme(&scheme) {
         return Err("APP_SCHEME debe ser un esquema URI válido de hasta 32 caracteres".into());

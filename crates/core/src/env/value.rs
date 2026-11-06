@@ -3,6 +3,7 @@ use std::{
     cell::RefCell,
     marker::PhantomData,
     rc::Rc,
+    str::FromStr,
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
@@ -11,6 +12,18 @@ use std::{
 
 const MAX_KEY_BYTES: usize = 256;
 const MAX_VALUE_BYTES: usize = 4096;
+
+pub trait EnvironmentInteger: Copy + FromStr + ToString {}
+
+macro_rules! implement_environment_integer {
+    ($($integer:ty),+ $(,)?) => {
+        $(impl EnvironmentInteger for $integer {})+
+    };
+}
+
+implement_environment_integer!(
+    i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize
+);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EnvironmentValue {
@@ -39,13 +52,25 @@ impl<'a> Env<'a> {
             None => Ok(fallback),
         }
     }
+
+    /// Check whether the source defines a value for `key`.
+    pub fn contains(&self, key: &str) -> Result<bool, EnvironmentError> {
+        validate_key(key)?;
+        self.source.read(key).map(|value| value.is_some())
+    }
+
     pub fn require(&self, key: &str) -> Result<EnvironmentValue, EnvironmentError> {
         match self.get(key, EnvironmentValue::Null)? {
             EnvironmentValue::Null => Err(EnvironmentError::MissingRequired(key.to_owned())),
             value => Ok(value),
         }
     }
-    pub fn string(&self, key: &str, fallback: &str) -> Result<String, EnvironmentError> {
+    pub fn string(&self, key: &str, fallback: &str) -> String {
+        self.try_string(key, fallback)
+            .unwrap_or_else(|_| fallback.to_owned())
+    }
+
+    pub fn try_string(&self, key: &str, fallback: &str) -> Result<String, EnvironmentError> {
         match self.get(key, EnvironmentValue::String(fallback.to_owned()))? {
             EnvironmentValue::String(value) => Ok(value),
             _ => Err(EnvironmentError::TypeMismatch {
@@ -54,12 +79,61 @@ impl<'a> Env<'a> {
             }),
         }
     }
-    pub fn boolean(&self, key: &str, fallback: bool) -> Result<bool, EnvironmentError> {
+    pub fn boolean(&self, key: &str, fallback: bool) -> bool {
+        self.try_boolean(key, fallback).unwrap_or(fallback)
+    }
+
+    pub fn try_boolean(&self, key: &str, fallback: bool) -> Result<bool, EnvironmentError> {
         match self.get(key, EnvironmentValue::Bool(fallback))? {
             EnvironmentValue::Bool(value) => Ok(value),
             _ => Err(EnvironmentError::TypeMismatch {
                 key: key.to_owned(),
                 expected: "true or false",
+            }),
+        }
+    }
+
+    /// Read a required integer. Its concrete Rust type is inferred from the
+    /// receiving field or can be supplied with a turbofish.
+    pub fn int<T: EnvironmentInteger>(&self, key: &str) -> Result<T, EnvironmentError> {
+        let value = match self.require(key)? {
+            EnvironmentValue::String(value) => {
+                value.parse().map_err(|_| EnvironmentError::TypeMismatch {
+                    key: key.to_owned(),
+                    expected: "an integer",
+                })?
+            }
+            _ => {
+                return Err(EnvironmentError::TypeMismatch {
+                    key: key.to_owned(),
+                    expected: "an integer",
+                });
+            }
+        };
+        Ok(value)
+    }
+
+    /// Read an optional integer, using `fallback` when it is absent or invalid.
+    pub fn int_or<T: EnvironmentInteger>(&self, key: &str, fallback: T) -> T {
+        self.try_int_or(key, fallback).unwrap_or(fallback)
+    }
+
+    /// Read an optional integer, using `fallback` only when the key is absent.
+    pub fn try_int_or<T: EnvironmentInteger>(
+        &self,
+        key: &str,
+        fallback: T,
+    ) -> Result<T, EnvironmentError> {
+        match self.get(key, EnvironmentValue::String(fallback.to_string()))? {
+            EnvironmentValue::String(value) => {
+                value.parse().map_err(|_| EnvironmentError::TypeMismatch {
+                    key: key.to_owned(),
+                    expected: "an integer",
+                })
+            }
+            _ => Err(EnvironmentError::TypeMismatch {
+                key: key.to_owned(),
+                expected: "an integer",
             }),
         }
     }
@@ -116,14 +190,32 @@ pub fn env(key: &str) -> Result<EnvironmentValue, EnvironmentError> {
     }
 }
 
-pub fn env_string(key: &str, fallback: &str) -> Result<String, EnvironmentError> {
+pub fn env_string(key: &str, fallback: &str) -> String {
     let source = active_source();
     Env::new(source.as_deref().unwrap_or(&super::ProcessEnvironment)).string(key, fallback)
 }
 
-pub fn env_boolean(key: &str, fallback: bool) -> Result<bool, EnvironmentError> {
+pub fn env_boolean(key: &str, fallback: bool) -> bool {
     let source = active_source();
     Env::new(source.as_deref().unwrap_or(&super::ProcessEnvironment)).boolean(key, fallback)
+}
+
+pub fn env_int<T: EnvironmentInteger>(key: &str) -> Result<T, EnvironmentError> {
+    let source = active_source();
+    Env::new(source.as_deref().unwrap_or(&super::ProcessEnvironment)).int(key)
+}
+
+pub fn env_int_or<T: EnvironmentInteger>(key: &str, fallback: T) -> T {
+    let source = active_source();
+    Env::new(source.as_deref().unwrap_or(&super::ProcessEnvironment)).int_or(key, fallback)
+}
+
+pub fn env_try_int_or<T: EnvironmentInteger>(
+    key: &str,
+    fallback: T,
+) -> Result<T, EnvironmentError> {
+    let source = active_source();
+    Env::new(source.as_deref().unwrap_or(&super::ProcessEnvironment)).try_int_or(key, fallback)
 }
 
 fn active_source() -> Option<Arc<dyn EnvironmentSource>> {

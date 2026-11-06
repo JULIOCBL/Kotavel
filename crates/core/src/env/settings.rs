@@ -13,9 +13,9 @@ pub struct AppEnvironment {
 impl AppEnvironment {
     pub fn load(env: &Env<'_>) -> Result<Self, EnvironmentError> {
         Self::validate(
-            env.string("APP_NAME", "Kotavel")?,
-            env.string("APP_ENV", "production")?,
-            env.boolean("APP_DEBUG", false)?,
+            env.try_string("APP_NAME", "Kotavel")?,
+            env.try_string("APP_ENV", "production")?,
+            env.try_boolean("APP_DEBUG", false)?,
         )
     }
 
@@ -23,9 +23,9 @@ impl AppEnvironment {
     /// falling back to process variables when no scope is installed.
     pub fn load_current() -> Result<Self, EnvironmentError> {
         Self::validate(
-            env_string("APP_NAME", "Kotavel")?,
-            env_string("APP_ENV", "production")?,
-            env_boolean("APP_DEBUG", false)?,
+            env_string("APP_NAME", "Kotavel"),
+            env_string("APP_ENV", "production"),
+            env_boolean("APP_DEBUG", false),
         )
     }
 

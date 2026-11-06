@@ -93,7 +93,7 @@ impl FileEnvironment {
             process: ProcessEnvironment,
             values,
         };
-        if Env::new(&result).string("APP_ENV", environment)? != environment {
+        if Env::new(&result).try_string("APP_ENV", environment)? != environment {
             return Err(invalid_file(
                 &path,
                 0,

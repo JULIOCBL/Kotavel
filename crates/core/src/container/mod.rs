@@ -9,6 +9,7 @@ mod resolution;
 mod state;
 
 #[cfg(test)]
+#[path = "../../tests/unit/container/mod.rs"]
 mod tests;
 
 pub use error::ContainerError;

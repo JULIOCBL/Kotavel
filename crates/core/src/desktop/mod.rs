@@ -21,4 +21,5 @@ pub use router::{DesktopRouter, Route};
 pub(crate) use context::{Handler, valid_route, valid_segmented_name};
 
 #[cfg(test)]
+#[path = "../../tests/unit/desktop/mod.rs"]
 mod tests;

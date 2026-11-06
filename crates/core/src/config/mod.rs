@@ -18,4 +18,5 @@ pub use serde_json::{Map as ConfigMap, Value as ConfigValue};
 pub use store::Config;
 
 #[cfg(test)]
+#[path = "../../tests/unit/config/mod.rs"]
 mod tests;

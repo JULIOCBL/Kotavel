@@ -16,10 +16,11 @@ pub use context::{
 };
 pub use error::{DiagnosticError, ErrorConstructionError, RecoverableError};
 pub use logger::{
-    LogLevel, LogOptions, LogRecord, LogStats, Logger, LoggerInitError, ThrottleOptions,
+    LogChannel, LogLevel, LogOptions, LogRecord, LogStats, Logger, LoggerInitError, ThrottleOptions,
 };
 pub use pending::{FeatureStatus, configure_remote_logging, enable_fatal_system_capture};
 pub use render::{Environment, ErrorDetails, RenderedError, render_error};
 
 #[cfg(test)]
+#[path = "../../tests/unit/diagnostics/mod.rs"]
 mod tests;

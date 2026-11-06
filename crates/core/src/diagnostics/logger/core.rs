@@ -94,12 +94,12 @@ impl Logger {
             ));
         }
         validate_throttle(options.throttle)?;
-        if options.enabled && options.file && options.directory.as_os_str().is_empty() {
+        if options.channel.writes_file() && options.directory.as_os_str().is_empty() {
             return Err(LoggerInitError::InvalidOptions(
                 "File logger requires a directory",
             ));
         }
-        let lease = if options.enabled && options.file {
+        let lease = if options.channel.writes_file() {
             filesystem
                 .create_directories(&options.directory, false)
                 .map_err(LoggerInitError::Io)?;
@@ -160,7 +160,7 @@ impl Logger {
 
     /// Returns written, filtered, throttled, or failed without unwinding.
     pub fn write(&self, record: &LogRecord<'_>) -> ReportStatus {
-        if !self.options.enabled {
+        if !self.options.channel.is_enabled() {
             self.filtered.fetch_add(1, Ordering::Relaxed);
             return ReportStatus::Filtered;
         }
@@ -234,10 +234,10 @@ impl Logger {
             return Ok(WriteResult::Throttled);
         }
         let line = format_record(record, module, self.options.max_bytes).map_err(|_| ())?;
-        if self.options.file {
+        if self.options.channel.writes_file() {
             self.append_with_rotation(&line).map_err(|_| ())?;
         }
-        if self.options.console {
+        if self.options.channel.writes_console() {
             let mut stderr = io::stderr().lock();
             stderr.write_all(line.as_bytes()).map_err(|_| ())?;
             stderr.flush().map_err(|_| ())?;

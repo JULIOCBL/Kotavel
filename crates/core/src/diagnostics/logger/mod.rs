@@ -4,7 +4,8 @@ mod core;
 mod format;
 mod options;
 #[cfg(test)]
+#[path = "../../../tests/unit/diagnostics/logger/mod.rs"]
 mod tests;
 
 pub use core::{LogStats, Logger, LoggerInitError};
-pub use options::{LogLevel, LogOptions, LogRecord, ThrottleOptions};
+pub use options::{LogChannel, LogLevel, LogOptions, LogRecord, ThrottleOptions};

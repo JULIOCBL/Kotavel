@@ -21,4 +21,5 @@ pub use shell::{InteractiveShellError, run_interactive_shell};
 #[cfg(test)]
 mod runtime_tests;
 #[cfg(test)]
+#[path = "../../tests/unit/console/mod.rs"]
 mod tests;
