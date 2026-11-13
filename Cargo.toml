@@ -23,5 +23,6 @@ rusqlite = { version = "0.37", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 sysinfo = { version = "0.35.2", default-features = false, features = ["system"] }
+tokio = { version = "1", features = ["macros", "signal"] }
 tempfile = "3"
 url = "2"

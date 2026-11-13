@@ -10,6 +10,7 @@ fn diagnostic_captures_caller_context_and_enforces_codes() {
     assert!(
         location
             .file_name()
+            .replace('\\', "/")
             .ends_with("tests/unit/diagnostics/mod.rs")
     );
     assert_eq!(error.context().origin, TraceOrigin::ExceptionConstruction);
@@ -87,7 +88,12 @@ fn production_error_presentation_hides_internal_details() {
 
     let development = render_error(&details, Environment::Development, None);
     assert!(development.detail.contains("password=hunter2"));
-    assert!(development.detail.contains("tests/unit/diagnostics/mod.rs"));
+    assert!(
+        development
+            .detail
+            .replace('\\', "/")
+            .contains("tests/unit/diagnostics/mod.rs")
+    );
 }
 
 #[test]

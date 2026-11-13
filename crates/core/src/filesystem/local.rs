@@ -2,6 +2,10 @@
 
 use super::{FileCursor, FileLock, Filesystem, platform};
 use fs2::FileExt;
+#[cfg(windows)]
+use std::collections::HashSet;
+#[cfg(windows)]
+use std::sync::{Condvar, Mutex, OnceLock};
 use std::{
     fs::{self, File, ReadDir},
     io::{self, Read, Write},
@@ -10,6 +14,9 @@ use std::{
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct LocalFilesystem;
+
+#[cfg(windows)]
+static HELD_LOCKS: OnceLock<(Mutex<HashSet<PathBuf>>, Condvar)> = OnceLock::new();
 
 pub(crate) fn restrict_existing_file(path: &Path) -> io::Result<()> {
     platform::restrict_file_path(path)
@@ -59,7 +66,7 @@ impl Filesystem for LocalFilesystem {
             .prefix(".kotavel-tmp-")
             .tempfile_in(parent)?;
         if restrict_permissions {
-            platform::restrict_file(temporary.as_file())?;
+            platform::restrict_file_path(temporary.path())?;
         }
         temporary.write_all(bytes)?;
         temporary.as_file().sync_all()?;
@@ -101,14 +108,71 @@ impl Filesystem for LocalFilesystem {
 
     fn lock_file(&self, path: &Path) -> io::Result<Box<dyn FileLock>> {
         let file = platform::open_lock_file(path)?;
-        file.lock_exclusive()?;
-        Ok(Box::new(LocalFileLock(file)))
+        #[cfg(windows)]
+        let process_path = reserve_process_lock(path, true)?;
+        if let Err(error) = file.lock_exclusive() {
+            #[cfg(windows)]
+            release_process_lock(&process_path);
+            return Err(error);
+        }
+        Ok(Box::new(LocalFileLock {
+            file,
+            #[cfg(windows)]
+            process_path,
+        }))
     }
 
     fn try_lock_file(&self, path: &Path) -> io::Result<Box<dyn FileLock>> {
         let file = platform::open_lock_file(path)?;
-        file.try_lock_exclusive()?;
-        Ok(Box::new(LocalFileLock(file)))
+        #[cfg(windows)]
+        let process_path = reserve_process_lock(path, false)?;
+        if let Err(error) = file.try_lock_exclusive() {
+            #[cfg(windows)]
+            release_process_lock(&process_path);
+            return Err(platform::normalize_lock_error(error));
+        }
+        #[cfg(not(windows))]
+        let process_path = ();
+        Ok(Box::new(LocalFileLock {
+            file,
+            #[cfg(windows)]
+            process_path,
+        }))
+    }
+}
+
+#[cfg(windows)]
+fn reserve_process_lock(path: &Path, wait: bool) -> io::Result<Option<PathBuf>> {
+    let canonical = fs::canonicalize(path)?;
+    let (held_locks, changed) =
+        HELD_LOCKS.get_or_init(|| (Mutex::new(HashSet::new()), Condvar::new()));
+    let mut held = held_locks
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    while held.contains(&canonical) {
+        if !wait {
+            return Err(io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "lock already held in this process",
+            ));
+        }
+        held = changed
+            .wait(held)
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+    }
+    held.insert(canonical.clone());
+    Ok(Some(canonical))
+}
+
+#[cfg(windows)]
+fn release_process_lock(path: &Option<PathBuf>) {
+    let Some(path) = path else { return };
+    if let Some((held_locks, changed)) = HELD_LOCKS.get() {
+        held_locks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(path);
+        changed.notify_one();
     }
 }
 
@@ -136,11 +200,19 @@ impl FileCursor for LocalFileCursor {
     }
 }
 
-struct LocalFileLock(File);
+struct LocalFileLock {
+    file: File,
+    #[cfg(windows)]
+    process_path: Option<PathBuf>,
+}
 impl FileLock for LocalFileLock {}
 impl Drop for LocalFileLock {
     fn drop(&mut self) {
-        let _ = FileExt::unlock(&self.0);
+        let _ = FileExt::unlock(&self.file);
+        #[cfg(windows)]
+        if let Some(path) = self.process_path.take() {
+            release_process_lock(&Some(path));
+        }
     }
 }
 

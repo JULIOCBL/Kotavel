@@ -1,16 +1,13 @@
 # Documentación de Kotavel
 
-La documentación se divide en dos áreas: arquitectura y manuales de módulos.
+Kotavel es el framework Rust compartido por Laboratory-Kotavel. Esta documentación describe la arquitectura actual, sus crates y las APIs por módulo.
 
 ## Arquitectura
 
-Blueprint, dependencias entre crates, ciclo de vida y pruebas:
-[docs/architecture/README.md](architecture/README.md).
+Blueprint, límites entre `core` y `platform`, ciclo de vida y validación: [arquitectura](architecture/README.md).
 
 ## Módulos
 
-Responsabilidades, API y ejemplos independientes:
-[docs/modules/README.md](modules/README.md).
+Responsabilidades, APIs y ejemplos: [manual de módulos](modules/README.md).
 
-Al agregar una capacidad, actualiza su página y el índice. Estos documentos
-describen Rust; las instrucciones de C++ y Python retiradas se eliminaron.
+Al agregar una capacidad, actualiza su página y el índice.

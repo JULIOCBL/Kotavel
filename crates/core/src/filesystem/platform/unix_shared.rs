@@ -5,11 +5,12 @@ use std::{
     path::Path,
 };
 
+pub fn normalize_lock_error(error: io::Error) -> io::Error {
+    error
+}
+
 pub fn restrict_directory(path: &Path) -> io::Result<()> {
     fs::set_permissions(path, fs::Permissions::from_mode(0o700))
-}
-pub fn restrict_file(file: &File) -> io::Result<()> {
-    file.set_permissions(fs::Permissions::from_mode(0o600))
 }
 pub fn restrict_file_path(path: &Path) -> io::Result<()> {
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))

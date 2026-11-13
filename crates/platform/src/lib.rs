@@ -4,9 +4,12 @@
 //! applications. Their implementations are being moved into this crate without
 //! changing the capability contracts.
 
+pub mod build_support;
+pub mod desktop_toolchain;
 pub mod filesystem;
 pub mod network;
 pub mod runtime_paths;
+pub mod signals;
 pub mod system_metrics;
 pub mod system_paths;
 
