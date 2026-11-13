@@ -33,8 +33,7 @@ enum PackageFormat {
 
 /// Builds a Rust binary and packages it as a macOS application bundle.
 ///
-/// This command is intentionally implemented separately from the legacy C++
-/// package scripts. It does not change or invoke the CMake build.
+/// Builds and packages the Rust application as a macOS application bundle.
 pub fn package_project(
     project: &Path,
     manifest: &Path,

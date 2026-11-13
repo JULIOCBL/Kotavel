@@ -105,7 +105,9 @@ impl Logger {
                 .map_err(LoggerInitError::Io)?;
             let lock_path = options.directory.join(".kotavel.logger.lock");
             let lease = filesystem.try_lock_file(&lock_path).map_err(|error| {
-                if error.kind() == io::ErrorKind::WouldBlock {
+                if error.kind() == io::ErrorKind::WouldBlock
+                    || (cfg!(windows) && matches!(error.raw_os_error(), Some(5 | 32 | 33)))
+                {
                     LoggerInitError::AlreadyOwned
                 } else {
                     LoggerInitError::Io(error)

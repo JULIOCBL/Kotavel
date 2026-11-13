@@ -2,6 +2,7 @@
 
 mod arguments;
 mod context;
+mod desktop_toolchain;
 mod package;
 mod platform;
 mod runtime;
@@ -10,6 +11,7 @@ mod shell;
 
 pub use arguments::{ConsoleArgumentError, ConsoleArguments, parse_console_arguments};
 pub use context::{ConsoleCallbackError, ConsoleContext};
+pub use desktop_toolchain::DesktopToolchain;
 pub use package::package_project;
 pub use runtime::{
     ConfigureConsole, CreateServiceProviders, ExecuteConsole, LoadConsoleConfig, execute_console,

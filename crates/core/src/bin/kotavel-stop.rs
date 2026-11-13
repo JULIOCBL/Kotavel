@@ -1,3 +1,5 @@
+#[cfg(windows)]
+use std::os::windows::ffi::OsStringExt;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -5,8 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 #[cfg(unix)]
-use sysinfo::Signal;
-use sysinfo::{Pid, Process, ProcessStatus, ProcessesToUpdate, System};
+use sysinfo::{Pid, Process, ProcessStatus, ProcessesToUpdate, Signal, System};
 
 struct Options {
     project: PathBuf,
@@ -35,13 +36,18 @@ fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     };
     let project = resolve_project(options.project)?;
     let instances = find_instances(&project, options.pid)?;
+    #[cfg(unix)]
     let mut system = System::new();
-    system.refresh_processes(ProcessesToUpdate::All, true);
 
     let mut stopped = Vec::new();
     let mut failures = Vec::new();
     for instance in instances {
-        match stop_instance(&mut system, &instance, &project) {
+        match stop_instance(
+            #[cfg(unix)]
+            &mut system,
+            &instance,
+            &project,
+        ) {
             Ok(forced) => stopped.push((instance.pid, forced)),
             Err(error) => failures.push(format!("{}: {error}", instance.pid)),
         }
@@ -128,6 +134,7 @@ fn find_instances(project: &Path, requested_pid: Option<u32>) -> Result<Vec<Inst
             project.display()
         )
     })?;
+    #[cfg(unix)]
     let mut system = System::new();
     let mut candidates = Vec::new();
     for entry in entries.filter_map(Result::ok) {
@@ -138,12 +145,19 @@ fn find_instances(project: &Path, requested_pid: Option<u32>) -> Result<Vec<Inst
         if requested_pid.is_some_and(|requested| requested != pid) || !valid_endpoint(&endpoint) {
             continue;
         }
-        let process = Pid::from(pid as usize);
-        system.refresh_processes(ProcessesToUpdate::Some(&[process]), true);
-        if let Some(process_info) = system.process(process) {
-            if process_belongs_to_project(process_info, project) {
-                candidates.push(Instance { endpoint, pid });
+        #[cfg(unix)]
+        {
+            let process = Pid::from(pid as usize);
+            system.refresh_processes(ProcessesToUpdate::Some(&[process]), true);
+            if let Some(process_info) = system.process(process) {
+                if process_belongs_to_project(process_info, project) {
+                    candidates.push(Instance { endpoint, pid });
+                }
             }
+        }
+        #[cfg(windows)]
+        if process_belongs_to_project(pid, project) {
+            candidates.push(Instance { endpoint, pid });
         }
     }
     candidates.sort_by_key(|instance| instance.pid);
@@ -176,6 +190,7 @@ fn valid_endpoint(endpoint: &Path) -> bool {
         .is_some_and(|port| port > 0)
 }
 
+#[cfg(unix)]
 fn process_belongs_to_project(process: &Process, project: &Path) -> bool {
     let Ok(project) = project.canonicalize() else {
         return false;
@@ -216,6 +231,51 @@ fn process_belongs_to_project(process: &Process, project: &Path) -> bool {
     !has_project_argument || project_argument_matches
 }
 
+#[cfg(windows)]
+fn process_belongs_to_project(pid: u32, project: &Path) -> bool {
+    let Some(executable) = windows_process_image(pid).and_then(|path| path.canonicalize().ok())
+    else {
+        return false;
+    };
+    let Ok(project) = project.canonicalize() else {
+        return false;
+    };
+    let mut executable_roots = ["build", "target", "dist"]
+        .into_iter()
+        .filter_map(|directory| project.join(directory).canonicalize().ok())
+        .collect::<Vec<_>>();
+    if let Some(target_dir) = env::var_os("CARGO_TARGET_DIR")
+        .and_then(|directory| PathBuf::from(directory).canonicalize().ok())
+    {
+        executable_roots.push(target_dir);
+    }
+    executable_roots
+        .iter()
+        .any(|root| executable.starts_with(root))
+}
+
+#[cfg(windows)]
+fn windows_process_image(pid: u32) -> Option<PathBuf> {
+    use windows_sys::Win32::{
+        Foundation::CloseHandle,
+        System::Threading::{
+            OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
+        },
+    };
+
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if process.is_null() {
+        return None;
+    }
+    let mut buffer = vec![0u16; 32_768];
+    let mut length = buffer.len() as u32;
+    let result =
+        unsafe { QueryFullProcessImageNameW(process, 0, buffer.as_mut_ptr(), &mut length) };
+    unsafe { CloseHandle(process) };
+    (result != 0).then(|| PathBuf::from(std::ffi::OsString::from_wide(&buffer[..length as usize])))
+}
+
+#[cfg(any(unix, test))]
 fn same_path(left: &Path, right: &Path) -> bool {
     #[cfg(windows)]
     {
@@ -229,6 +289,7 @@ fn same_path(left: &Path, right: &Path) -> bool {
     }
 }
 
+#[cfg(unix)]
 fn process_is_running(system: &mut System, pid: u32, project: &Path) -> Result<bool, String> {
     let process_id = Pid::from(pid as usize);
     system.refresh_processes(ProcessesToUpdate::Some(&[process_id]), true);
@@ -247,6 +308,30 @@ fn process_is_running(system: &mut System, pid: u32, project: &Path) -> Result<b
     Ok(true)
 }
 
+#[cfg(windows)]
+fn process_is_running(pid: u32, project: &Path) -> Result<bool, String> {
+    use windows_sys::Win32::{
+        Foundation::{CloseHandle, STILL_ACTIVE},
+        System::Threading::{GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION},
+    };
+
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if process.is_null() {
+        return Ok(false);
+    }
+    let mut exit_code = 0;
+    let queried = unsafe { GetExitCodeProcess(process, &mut exit_code) } != 0;
+    unsafe { CloseHandle(process) };
+    if !queried || exit_code != STILL_ACTIVE as u32 {
+        return Ok(false);
+    }
+    if !process_belongs_to_project(pid, project) {
+        return Err("El PID ya no corresponde a esta aplicación; no se cerró otro proceso.".into());
+    }
+    Ok(true)
+}
+
+#[cfg(unix)]
 fn request_process_stop(system: &mut System, pid: u32, project: &Path) -> Result<(), String> {
     let process_id = Pid::from(pid as usize);
     system.refresh_processes(ProcessesToUpdate::Some(&[process_id]), true);
@@ -256,25 +341,21 @@ fn request_process_stop(system: &mut System, pid: u32, project: &Path) -> Result
     if !process_belongs_to_project(process, project) {
         return Err("El PID ya no corresponde a esta aplicación; no se envió la señal.".into());
     }
-    #[cfg(unix)]
-    {
-        if process.kill_with(Signal::Term) == Some(true) {
-            return Ok(());
-        }
-        Err("No se pudo enviar SIGTERM al proceso Kotavel.".into())
+    if process.kill_with(Signal::Term) == Some(true) {
+        return Ok(());
     }
-    #[cfg(windows)]
-    {
-        let _ = process;
-        request_windows_stop(pid)
-    }
-    #[cfg(not(any(unix, windows)))]
-    {
-        let _ = process;
-        Err("El cierre ordenado no está implementado para esta plataforma.".into())
-    }
+    Err("No se pudo enviar SIGTERM al proceso Kotavel.".into())
 }
 
+#[cfg(windows)]
+fn request_process_stop(pid: u32, project: &Path) -> Result<(), String> {
+    if !process_belongs_to_project(pid, project) {
+        return Err("El PID ya no corresponde a esta aplicación; no se envió la señal.".into());
+    }
+    request_windows_stop(pid)
+}
+
+#[cfg(unix)]
 fn force_process_stop(system: &mut System, pid: u32, project: &Path) -> Result<(), String> {
     let process_id = Pid::from(pid as usize);
     system.refresh_processes(ProcessesToUpdate::Some(&[process_id]), true);
@@ -291,6 +372,38 @@ fn force_process_stop(system: &mut System, pid: u32, project: &Path) -> Result<(
     }
 }
 
+#[cfg(windows)]
+fn force_process_stop(pid: u32, project: &Path) -> Result<(), String> {
+    use windows_sys::Win32::{
+        Foundation::CloseHandle,
+        System::Threading::{
+            OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE, TerminateProcess,
+        },
+    };
+
+    if !process_belongs_to_project(pid, project) {
+        return Err("El PID ya no corresponde a esta aplicación; no se cerró otro proceso.".into());
+    }
+    let process = unsafe {
+        OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE,
+            0,
+            pid,
+        )
+    };
+    if process.is_null() {
+        return Err(format!("No se pudo abrir el proceso Kotavel {pid}."));
+    }
+    let terminated = unsafe { TerminateProcess(process, 1) } != 0;
+    unsafe { CloseHandle(process) };
+    if terminated {
+        Ok(())
+    } else {
+        Err("No se pudo forzar el cierre del proceso Kotavel.".into())
+    }
+}
+
+#[cfg(unix)]
 fn stop_instance(system: &mut System, instance: &Instance, project: &Path) -> Result<bool, String> {
     request_process_stop(system, instance.pid, project)?;
     let graceful_deadline = Instant::now() + Duration::from_secs(10);
@@ -312,6 +425,40 @@ fn stop_instance(system: &mut System, instance: &Instance, project: &Path) -> Re
         if !process_is_running(system, instance.pid, project)? {
             remove_endpoint(&instance.endpoint)?;
             return Ok(true);
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    Err(format!(
+        "No se pudo detener el proceso Kotavel {}.",
+        instance.pid
+    ))
+}
+
+#[cfg(windows)]
+fn stop_instance(instance: &Instance, project: &Path) -> Result<bool, String> {
+    let mut forced = false;
+    if request_process_stop(instance.pid, project).is_err() {
+        force_process_stop(instance.pid, project)?;
+        forced = true;
+    } else {
+        let graceful_deadline = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < graceful_deadline {
+            if !process_is_running(instance.pid, project)? {
+                remove_endpoint(&instance.endpoint)?;
+                return Ok(false);
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        if process_is_running(instance.pid, project)? {
+            force_process_stop(instance.pid, project)?;
+            forced = true;
+        }
+    }
+    let force_deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < force_deadline {
+        if !process_is_running(instance.pid, project)? {
+            remove_endpoint(&instance.endpoint)?;
+            return Ok(forced);
         }
         thread::sleep(Duration::from_millis(100));
     }

@@ -226,8 +226,13 @@ fn package_plans_the_selected_project_and_forwards_package_options() {
 }
 
 #[test]
-fn run_plans_the_desktop_feature_and_project_root_for_laboratory() {
+fn run_selects_the_laboratory_binary_and_platform_default_feature() {
     let (_directory, _root, _core, laboratory) = laboratory_fixture();
+    let desktop_arguments = if cfg!(any(target_os = "macos", target_os = "windows")) {
+        vec![OsString::from("--features"), OsString::from("desktop-qt")]
+    } else {
+        Vec::new()
+    };
     let plan = plan_command(
         options("run", &["--env", "development"]),
         laboratory.clone(),
@@ -239,7 +244,7 @@ fn run_plans_the_desktop_feature_and_project_root_for_laboratory() {
             project: laboratory.clone(),
             manifest: laboratory.join("Cargo.toml"),
             binary: Some("kotavel-laboratory".into()),
-            cargo_arguments: vec!["--features".into(), "desktop-qt".into()],
+            cargo_arguments: desktop_arguments.clone(),
             runtime_arguments: vec![
                 "--env=development".into(),
                 format!("--project-root={}", laboratory.display()).into(),
@@ -250,7 +255,7 @@ fn run_plans_the_desktop_feature_and_project_root_for_laboratory() {
         ProcessSpec::run(
             &laboratory.join("Cargo.toml"),
             Some(&OsString::from("kotavel-laboratory")),
-            &["--features".into(), "desktop-qt".into()],
+            &desktop_arguments,
             &[
                 "--env=development".into(),
                 format!("--project-root={}", laboratory.display()).into(),
@@ -259,19 +264,22 @@ fn run_plans_the_desktop_feature_and_project_root_for_laboratory() {
         ),
         ProcessSpec {
             program: "cargo".into(),
-            arguments: [
-                "run".into(),
-                "--manifest-path".into(),
-                laboratory.join("Cargo.toml").into_os_string(),
-                "--bin".into(),
-                "kotavel-laboratory".into(),
-                "--features".into(),
-                "desktop-qt".into(),
-                "--".into(),
-                "--env=development".into(),
-                format!("--project-root={}", laboratory.display()).into(),
-            ]
-            .into(),
+            arguments: {
+                let mut arguments = vec![
+                    "run".into(),
+                    "--manifest-path".into(),
+                    laboratory.join("Cargo.toml").into_os_string(),
+                    "--bin".into(),
+                    "kotavel-laboratory".into(),
+                ];
+                arguments.extend(desktop_arguments);
+                arguments.extend([
+                    "--".into(),
+                    "--env=development".into(),
+                    format!("--project-root={}", laboratory.display()).into(),
+                ]);
+                arguments
+            },
             current_dir: Some(laboratory.clone()),
             quiet_stdout: false,
         }

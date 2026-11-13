@@ -253,6 +253,7 @@ fn plan_command(options: Options, project: PathBuf) -> Result<CommandPlan, Strin
                 binary = Some("kotavel-laboratory".into());
             }
             if laboratory
+                && cfg!(any(target_os = "macos", target_os = "windows"))
                 && !cargo_arguments
                     .iter()
                     .any(|argument| argument == "--no-default-features")
@@ -806,7 +807,7 @@ fn print_help() {
     }
 
     println!(
-        "\n{}\n  --project RUTA  Seleccionar la raíz del proyecto.\n  -h, --help      Mostrar ayuda.\n\nEn Laboratory-Kotavel, run abre Qt; --no-default-features inicia solo HTTP.\nUsa cargo kotavel <comando> --help para ver las opciones de un comando.",
+        "\n{}\n  --project RUTA  Seleccionar la raíz del proyecto.\n  -h, --help      Mostrar ayuda.\n\nEn Laboratory-Kotavel, run activa Qt por defecto en macOS y Windows.\nUsa --no-default-features para ejecutar solo HTTP.\nUsa cargo kotavel <comando> --help para ver las opciones de un comando.",
         style("Opciones comunes", "1")
     );
 }
@@ -841,7 +842,7 @@ fn print_command_help(command: &str) {
         "run" => (
             "run [opciones] [-- ARG...]",
             "Inicia la aplicación seleccionada.",
-            "--bin NOMBRE     Elegir el binario.\n--features LISTA  Activar características Cargo.\n--release         Usar compilación optimizada.\n--env ENTORNO     Elegir local, development o production.\n--deep-link URI   Abrir una ruta Desktop.\nEn Laboratory-Kotavel, Qt se activa por defecto; --no-default-features inicia solo HTTP.",
+            "--bin NOMBRE     Elegir el binario.\n--features LISTA  Activar características Cargo.\n--release         Usar compilación optimizada.\n--env ENTORNO     Elegir local, development o production.\n--deep-link URI   Abrir una ruta Desktop.\nEn Laboratory-Kotavel, run activa Qt por defecto en macOS y Windows. --no-default-features inicia solo HTTP.",
         ),
         "shell" => (
             "shell [--project RUTA]",

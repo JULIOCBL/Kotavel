@@ -108,3 +108,15 @@ fn file_lock_serializes_threads_until_drop() -> io::Result<()> {
     assert!(acquired.load(std::sync::atomic::Ordering::Acquire));
     Ok(())
 }
+
+#[cfg(windows)]
+#[test]
+fn windows_lock_conflicts_use_the_cross_platform_would_block_kind() {
+    for code in [5, 32, 33] {
+        let error = platform::normalize_lock_error(io::Error::from_raw_os_error(code));
+        assert_eq!(error.kind(), io::ErrorKind::WouldBlock);
+    }
+
+    let error = platform::normalize_lock_error(io::Error::from_raw_os_error(87));
+    assert_eq!(error.raw_os_error(), Some(87));
+}

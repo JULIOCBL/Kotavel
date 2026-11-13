@@ -36,8 +36,8 @@ pub trait Filesystem: Send + Sync {
     fn list_files(&self, directory: &Path) -> io::Result<Vec<PathBuf>>;
     fn scan_files(&self, directory: &Path) -> io::Result<Box<dyn FileCursor>>;
     fn lock_file(&self, path: &Path) -> io::Result<Box<dyn FileLock>>;
-    /// Try to acquire an exclusive lock without waiting. Backends may provide a
-    /// blocking fallback when nonblocking locks are unavailable.
+    /// Try to acquire an exclusive lock without waiting. A lock already held
+    /// by another process is reported as `io::ErrorKind::WouldBlock` on every OS.
     fn try_lock_file(&self, path: &Path) -> io::Result<Box<dyn FileLock>> {
         self.lock_file(path)
     }

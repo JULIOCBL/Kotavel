@@ -1,15 +1,13 @@
 use std::{fs::File, io, path::Path};
 
+pub fn normalize_lock_error(error: io::Error) -> io::Error {
+    error
+}
+
 pub fn restrict_directory(_path: &Path) -> io::Result<()> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
         "private directory permissions are unsupported on this platform",
-    ))
-}
-pub fn restrict_file(_file: &File) -> io::Result<()> {
-    Err(io::Error::new(
-        io::ErrorKind::Unsupported,
-        "private file permissions are unsupported on this platform",
     ))
 }
 pub fn restrict_file_path(_path: &Path) -> io::Result<()> {

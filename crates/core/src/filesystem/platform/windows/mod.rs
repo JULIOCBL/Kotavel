@@ -1,7 +1,7 @@
 use std::{
     fs::{File, OpenOptions},
     io,
-    os::windows::{ffi::OsStrExt, io::AsRawHandle},
+    os::windows::ffi::OsStrExt,
     path::Path,
     ptr::{null, null_mut},
 };
@@ -9,7 +9,7 @@ use windows_sys::Win32::{
     Foundation::{CloseHandle, GetLastError, HANDLE, LocalFree},
     Security::Authorization::{
         EXPLICIT_ACCESS_W, SE_FILE_OBJECT, SET_ACCESS, SetEntriesInAclW, SetNamedSecurityInfoW,
-        SetSecurityInfo, TRUSTEE_IS_SID, TRUSTEE_IS_USER, TRUSTEE_W,
+        TRUSTEE_IS_SID, TRUSTEE_IS_USER, TRUSTEE_W,
     },
     Security::{
         DACL_SECURITY_INFORMATION, GetTokenInformation, NO_INHERITANCE,
@@ -112,28 +112,6 @@ fn apply_acl_to_path(path: &Path, inheritance: u32) -> io::Result<()> {
     }
 }
 
-pub fn restrict_file(file: &File) -> io::Result<()> {
-    let acl = private_user_acl(NO_INHERITANCE)?;
-    let flags = DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION;
-    let handle = file.as_raw_handle() as HANDLE;
-    let result = unsafe {
-        SetSecurityInfo(
-            handle,
-            SE_FILE_OBJECT,
-            flags,
-            null_mut(),
-            null_mut(),
-            acl.0,
-            null_mut(),
-        )
-    };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::from_raw_os_error(result as i32))
-    }
-}
-
 pub fn sync_directory(_path: &Path) -> io::Result<()> {
     Ok(())
 }
@@ -148,14 +126,28 @@ pub fn replace_file_atomically(temporary: &Path, destination: &Path) -> io::Resu
         .encode_wide()
         .chain(Some(0))
         .collect();
+    // Windows can transiently deny replacement while another thread in this
+    // process is replacing the same destination. Serialize the short rename
+    // step; writing and flushing each unique temporary file remains concurrent.
+    static REPLACE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = REPLACE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
-    if unsafe { MoveFileExW(temporary.as_ptr(), destination.as_ptr(), flags) } != 0 {
-        Ok(())
-    } else {
-        Err(io::Error::from_raw_os_error(
-            unsafe { GetLastError() } as i32
-        ))
+    for attempt in 0..50 {
+        if unsafe { MoveFileExW(temporary.as_ptr(), destination.as_ptr(), flags) } != 0 {
+            return Ok(());
+        }
+        let error = unsafe { GetLastError() } as i32;
+        // Windows scanners and readers can briefly hold either path without
+        // delete sharing. Retry only transient replacement conflicts.
+        if attempt < 49 && matches!(error, 5 | 32 | 33) {
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            continue;
+        }
+        return Err(io::Error::from_raw_os_error(error));
     }
+    unreachable!("replacement retry loop always returns")
 }
 
 pub fn open_lock_file(path: &Path) -> io::Result<File> {
@@ -165,4 +157,12 @@ pub fn open_lock_file(path: &Path) -> io::Result<File> {
         .write(true)
         .truncate(false)
         .open(path)
+}
+
+pub fn normalize_lock_error(error: io::Error) -> io::Error {
+    if matches!(error.raw_os_error(), Some(5 | 32 | 33)) {
+        io::Error::new(io::ErrorKind::WouldBlock, error)
+    } else {
+        error
+    }
 }

@@ -77,6 +77,7 @@ fn nested_conditions_select_the_expected_value() {
 }
 
 #[test]
+#[allow(clippy::let_and_return)]
 fn branches_can_return_block_expressions_and_allow_a_trailing_comma() {
     let result = condition!(
         true,

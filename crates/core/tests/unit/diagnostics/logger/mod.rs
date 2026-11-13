@@ -180,10 +180,15 @@ fn concurrent_writes_are_complete_and_directory_has_one_owner() {
     let mut options = directory.options();
     options.max_bytes = 512 * 1024;
     let logger = Arc::new(Logger::new(options.clone()).unwrap());
-    assert!(matches!(
-        Logger::new(options),
-        Err(LoggerInitError::AlreadyOwned)
-    ));
+    let second_logger = Logger::new(options);
+    assert!(
+        matches!(&second_logger, Err(LoggerInitError::AlreadyOwned)),
+        "second logger initialization result: {}",
+        match second_logger {
+            Ok(_) => "unexpected success".to_owned(),
+            Err(error) => error.to_string(),
+        }
+    );
     let mut writers = Vec::new();
     for worker in 0..8 {
         let logger = Arc::clone(&logger);
